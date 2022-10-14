@@ -1,93 +1,29 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta http-equiv="X-UA-Compatible" content="IE=edge">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Procedural Environment Generation using WebGL</title>
-    <style>
-        body { margin: 0; }
-    </style>
-</head>
-<body>
-
-    <!--
-        Load Three.js
-        This helps with rendering in WebGL 
-    -->
-    <script src="./libs/three.js"></script>
-
-    <!-- 
-        Utility / Misc code
-        Any code here will be used to help any interactions between the webpage
-        and the WebGL code 
-    -->
-    <script>
-        this.peg = new Object();
-        this.peg.origin = new THREE.Vector3(0, 0, 0);
-
-        let translation = new THREE.Vector3(0, 0, 0);
-        
-        window.onkeydown = function(key) {
-            if(this.peg.camera == null || this.peg.camera == undefined) return;
-
-            switch(key.key.toLowerCase()) {
-                case "w":
-                case "arrowup":
-                    translation.set(0, 0, -1);
-                    break;
-                case "s":
-                case "arrowdown":
-                    translation.set(0, 0, 1);
-                    break;
-                case "a":
-                case "arrowleft":
-                    translation.set(-1, 0, 0);
-                    break;
-                case "d":
-                case "arrowright":
-                    translation.set(1, 0, 0);
-                    break;
+    <head>
+        <meta charset="UTF-8">
+        <meta http-equiv="X-UA-Compatible" content="IE=edge">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Procedural Environment Generation using WebGL</title>
+        <style>
+            body { margin: 0; }
+        </style>
+    
+        <script async src="https://unpkg.com/es-module-shims@1.6.0/dist/es-module-shims.js"></script>
+        <script src="https://unpkg.com/perlin-noise-3d"></script>
+        <script src="./js/marchingCubesLookup.js"></script>
+        <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.145.0/build/three.module",
+                "three/": "https://unpkg.com/three@0.145.0/",
+                "dat.gui": "https://unpkg.com/dat.gui"
             }
+        }
+        </script>
+    </head>
 
-            this.peg.camera.position.add(translation.clone().multiplyScalar(this.peg.clock.getDelta()));
-            translation.set(0, 0, 0);
-        };
-    </script>
-
-    <!--
-        WebGL code 
-        This code will handle anything related to Three.js
-    -->
-    <script>
-        const scene = new THREE.Scene();
-        const camera = new THREE.PerspectiveCamera( 75, window.innerWidth / window.innerHeight, 0.1, 1000 );
-        camera.position.z = 5;
-        this.peg.camera = camera;
-        this.peg.clock = new THREE.Clock();
-
-        this.peg.camera.vectors = {
-            forward: new THREE.Vector3(0, 0, 1),
-            right: new THREE.Vector3(1, 0, 0),
-            up: new THREE.Vector3(0, 1, 0)
-        };
-
-        const geometry = new THREE.BoxGeometry( 1, 1, 1 );
-        const material = new THREE.MeshBasicMaterial( { color: 0x00ff00 } );
-        const cube = new THREE.Mesh( geometry, material );
-        scene.add( cube );
-
-        const renderer = new THREE.WebGLRenderer();
-        renderer.setSize( window.innerWidth, window.innerHeight );
-        document.body.appendChild( renderer.domElement );
-
-        function animate() {
-            this.peg.clock.getDelta();
-			requestAnimationFrame(animate);
-            renderer.render( scene, this.peg.camera);
-		};
-
-		animate();
-    </script>
-</body>
+    <body>
+      <script type="module" src="js/index.js"></script>
+    </body>
 </html>
