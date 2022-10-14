@@ -1,6 +1,7 @@
 import * as THREE from 'three';
-import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-
+import { GUI } from 'dat.gui';
+import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
+//import { perlinNoise3d } from "perlin-noise-3d";
 
 
 // Create renderer
@@ -24,7 +25,7 @@ scene.add(light);
 
 
 const controls = new OrbitControls(camera, renderer.domElement);
-const noise = new perlinNoise3d();
+//const noise = new perlinNoise3d();
 
 let size = 1;
 const geometry = new THREE.BoxGeometry(size, size, size);
@@ -43,9 +44,9 @@ scene.add( cube );
 function animate() {
     controls.update();
 
-    noise.noiseSeed(new Date().getTime());
-    size = noise.get(0 + camera.position.x, 0 + camera.position.y, 0 + camera.position.z);
-    cube.scale.set(size, size, size);
+    //noise.noiseSeed(new Date().getTime());
+    //size = noise.get(0 + camera.position.x, 0 + camera.position.y, 0 + camera.position.z);
+    //cube.scale.set(size, size, size);
 
     requestAnimationFrame(animate);
     renderer.render( scene, camera);
