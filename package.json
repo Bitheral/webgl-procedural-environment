@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "build": "npx tsc && npx webpack build",
-    "serve": "npm run build && live-server dist"
+    "serve": "npm run build && live-server dist --no-browser"
   },
   "repository": {
     "type": "git",
