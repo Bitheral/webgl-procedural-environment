@@ -89,7 +89,7 @@ out
 
 # Nuxt.js build / generate output
 .nuxt
-dist/*.js*
+dist/
 
 # Gatsby files
 .cache/
@@ -128,3 +128,5 @@ dist/*.js*
 .yarn/build-state.yml
 .yarn/install-state.gz
 .pnp.*
+
+procedural-environment-generation-win32-x64/
