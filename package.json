@@ -7,7 +7,7 @@
     "watch": "tsc -w",
     "lint": "eslint -c .eslintrc --ext .ts ./src",
     "start": "npm run build && electron ./dist/main.js",
-    "electron:build": "electron-packager . --overwrite -p"
+    "electron:build": "npm run build && electron-packager . --overwrite -p --asar"
   },
   "main": "dist/main.js",
   "repository": {

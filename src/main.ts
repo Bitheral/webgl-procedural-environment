@@ -1,4 +1,4 @@
-import { app, BrowserWindow, Menu } from "electron";
+import { app, BrowserWindow } from "electron";
 import * as path from "path";
 
 function createWindow() {
@@ -14,15 +14,13 @@ function createWindow() {
     icon: path.join(__dirname, "assets", "icons", "icon.png") || undefined,
   });
 
-  mainWindow.setMenu(null);
-
   // Menu.setApplicationMenu(menu);
 
   // and load the index.html of the app.
   mainWindow.loadFile(path.join(__dirname, "../index.html"));
 
   // Open the DevTools.
-  mainWindow.webContents.openDevTools();
+  // mainWindow.webContents.openDevTools();
 }
 
 // This method will be called when Electron has finished
@@ -30,8 +28,6 @@ function createWindow() {
 // Some APIs can only be used after this event occurs.
 app.whenReady().then(() => {
   createWindow();
-
-  
 
   app.on("activate", function () {
     // On macOS it's common to re-create a window in the app when the
