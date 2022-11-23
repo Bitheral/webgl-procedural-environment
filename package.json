@@ -38,8 +38,6 @@
   "dependencies": {
     "@types/three": "^0.144.0",
     "three": "^0.145.0",
-    "three-orbit-controls": "^82.1.0",
-    "three-orbitcontrols": "^2.110.3",
-    "three-orbitcontrols-ts": "^0.1.2"
+    "three-orbitcontrols": "github:Bitheral/three-orbitcontrols"
   }
 }
