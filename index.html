@@ -9,16 +9,19 @@
     <!-- https://developer.mozilla.org/en-US/docs/Web/HTTP/CSP -->
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; script-src 'self'"
+      content="default-src 'self'; script-src 'self' 'unsafe-eval'; style-src 'self' 'unsafe-inline';"
     />
     <meta
       http-equiv="X-Content-Security-Policy"
       content="default-src 'self'; script-src 'self'"
     />
     <link rel="stylesheet" href="./dist/css/styles.css" />
+    <!-- <link rel="stylesheet" href="https://raw.githubusercontent.com/dataarts/dat.gui/master/build/dat.gui.css" />
+    <script type="text/javascript" src="https://raw.githubusercontent.com/dataarts/dat.gui/master/build/dat.gui.min.js"></script> -->
   </head>
   <body>
     <div id="webgl"></div>
+    <div id="noise"></div>
 
     <!-- You can also require other files to run in this process -->
     <script src="./dist/renderer.js"></script>
