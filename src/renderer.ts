@@ -8,14 +8,24 @@
 // needed in the renderer process.
 
 // Get threejs
-import { Float32BufferAttribute, Vector2, Vector3 } from 'three';
+import { Float32BufferAttribute, Vector2, BufferGeometry, Vector3, DirectionalLight } from 'three';
 import THREE = require('three');
+
+import Stats = require('stats.js');
+import { GUI } from 'dat.gui';
+
+
+const stats = new Stats()
+stats.showPanel( 1 ); // 0: fps, 1: ms, 2: mb, 3+: custom
+document.body.appendChild( stats.dom );
 
 // OrbitControls.js
 //import OrbitControls = require('three-orbitcontrols-ts');
 import OrbitControls = require('three-orbitcontrols');
 
+import MarchingCubes from "@bitheral/marching-cubes";
 
+const gui = new GUI();
 
 // Example Three.js code
 const scene = new THREE.Scene();
@@ -29,58 +39,57 @@ renderer.setSize( window.innerWidth, window.innerHeight );
 renderer.setClearColor( 0x000000, 0);
 document.getElementById('webgl').appendChild( renderer.domElement );
 
-const material = new THREE.MeshLambertMaterial( { color: 0x00ff00, wireframe: true } );
+const volume = new MarchingCubes.Volume(15, new Vector3(0, 0, 0), 0.3);
+const volumeMesh = volume.mergeGeometries(volume.March());
+
+// Create a gui folder for the volume's noise settings
+const noiseFolder = gui.addFolder('Noise Settings');
+noiseFolder.add(volume, 'noiseScale', 0, 1);
+
+controls.target = new Vector3(volume.getScale() * 0.5, volume.getScale() * 0.5, volume.getScale() * 0.5);
+
+const mesh = new THREE.Mesh(volumeMesh, new THREE.MeshLambertMaterial({color: 0xffffff, wireframe: false}));
+mesh.position.set(0,0,0);
+scene.add(mesh);
+
+const light = new DirectionalLight(0xffffff, 1);
+light.position.set(0, 1, 0);
+scene.add(light);
 
 
-// Simple box geometry
-const box = new THREE.BoxGeometry();
+// Create an image which shows the noise
+const noiseCanvas = document.createElement('canvas');
+noiseCanvas.width = 256;
+noiseCanvas.height = 256;
 
-
-const planeResolution = 10;
-const planeGeometry = new THREE.PlaneGeometry(planeResolution, planeResolution, planeResolution, planeResolution);
-planeGeometry.rotateX(-Math.PI / 2)
-
-// Move it to the center
-const mesh = new THREE.Mesh(planeGeometry, material);
-mesh.position.set(0, 0, 0);
-
-
-const objectsInScene = 10;
-for (let i = 0; i < objectsInScene; i++) {
-    box.clone().scale(1,2,1);
-    const mat = material.clone();
-    mat.wireframe = false;
-    // Randomise color
-    const colour = Math.random() * 0xffffff;
-    mat.color.setHex(colour);
-
-    const mesh = new THREE.Mesh(box, mat);
-    // Random number between 0 and planeResolution
-    const x = Math.floor(Math.random() * planeResolution - (planeResolution / 2));
-    const z = Math.floor(Math.random() * planeResolution - (planeResolution / 2));
-    mesh.position.set(x, 0.5, z);
-    scene.add(mesh);
-
-    const light = new THREE.PointLight(colour, 1, 5)
-    light.position.set(x, 2, z)
-
-    const lightV = box.clone().scale(0.1, 0.1, 0.1);
-    const lightR = new THREE.SphereGeometry(light.distance / 2, 128, 128);
-    const idV = new THREE.Mesh(lightV, new THREE.MeshBasicMaterial({color: colour}));
-    const idR = new THREE.Mesh(lightR, new THREE.MeshBasicMaterial({color: colour, wireframe: true}));
-
-    idV.position.set(light.position.x, light.position.y, light.position.z);
-    idR.position.set(light.position.x, light.position.y, light.position.z);
-    scene.add(light)
+const noiseContext = noiseCanvas.getContext('2d');
+const noiseImageData = noiseContext.createImageData(noiseCanvas.width, noiseCanvas.height);
+const noiseData = noiseImageData.data;
+for(let y = 0; y < noiseCanvas.height; y++) {
+    for(let x = 0; x < noiseCanvas.width; x++) {
+        const index = (x + y * noiseCanvas.width) * 4;
+        const value = volume.noise["2D"](x / noiseCanvas.width, y / noiseCanvas.height);
+        noiseData[index] = value * 255;
+        noiseData[index + 1] = value * 255;
+        noiseData[index + 2] = value * 255;
+        noiseData[index + 3] = 255;
+    }
 }
 
-scene.add( mesh );
-camera.position.set(0, 8, 10);
+noiseContext.putImageData(noiseImageData, 0, 0);
+document.getElementById('noise').appendChild(noiseCanvas);
+
+
+
+//camera.position.set(0, 8, 10);
+
+// Camera orbit around center of the volume
 
 function animate() {
     requestAnimationFrame(animate)
     controls.update()
     render()
+    stats.update();
 }
 
 function render() {
