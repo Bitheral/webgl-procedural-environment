@@ -39,18 +39,21 @@ renderer.setSize( window.innerWidth, window.innerHeight );
 renderer.setClearColor( 0x000000, 0);
 document.getElementById('webgl').appendChild( renderer.domElement );
 
-const volume = new MarchingCubes.Volume(15, new Vector3(0, 0, 0), 0.3);
+const volume = new MarchingCubes.Volume(15, new Vector3(0, 0, 0));
 const volumeMesh = volume.mergeGeometries(volume.March());
-
-// Create a gui folder for the volume's noise settings
-const noiseFolder = gui.addFolder('Noise Settings');
-noiseFolder.add(volume, 'noiseScale', 0, 1);
 
 controls.target = new Vector3(volume.getScale() * 0.5, volume.getScale() * 0.5, volume.getScale() * 0.5);
 
 const mesh = new THREE.Mesh(volumeMesh, new THREE.MeshLambertMaterial({color: 0xffffff, wireframe: false}));
 mesh.position.set(0,0,0);
 scene.add(mesh);
+
+// Create a gui folder for the volume's noise settings
+const noiseFolder = gui.addFolder('Noise Settings');
+noiseFolder.add(volume, 'noiseScale', 0, 1).onChange(() => {
+    volume.update("geometry");
+    mesh.geometry = volume.geometry; 
+});
 
 const light = new DirectionalLight(0xffffff, 1);
 light.position.set(0, 1, 0);
