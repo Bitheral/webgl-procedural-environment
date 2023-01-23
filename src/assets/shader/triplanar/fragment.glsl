@@ -53,16 +53,37 @@ void main() {
 
     int DEBUG = 0;
 
-    vec2 uv_front = worldPosition.zy / volumeScale;
-    vec2 uv_side = worldPosition.xy / volumeScale;
-    vec2 uv_top = worldPosition.xz / volumeScale;
+    SampledMaterial frontM;
+    SampledMaterial topM;
+    SampledMaterial sideM;
 
-    SampledMaterial sideM = sampleMaterial(side, uv_side);
-    SampledMaterial topM = sampleMaterial(top, uv_top);
-    SampledMaterial frontM = sampleMaterial(side, uv_front);
+    vec2 uv_front = worldPosition.zy / volumeScale;
+    vec2 uv_back = (worldPosition.yz / volumeScale);
+
+    vec2 uv_left = worldPosition.xy / volumeScale;
+    vec2 uv_right = (worldPosition.yz / volumeScale);
+
+    vec2 uv_top = worldPosition.xz / volumeScale;
+    vec2 uv_bottom = (worldPosition.xz / volumeScale);
+
+    // Based on the normals, we can determine which side of the cube we are on
+    // and sample the correct material
+    if (normals.x <= 0.5) {
+        sideM = sampleMaterial(side, uv_left);
+    } else {
+        sideM = sampleMaterial(side, uv_right);
+    }
+
+    if (normals.z <= 0.5) {
+        frontM = sampleMaterial(side, uv_back);
+    } else {
+        frontM = sampleMaterial(side, uv_front);
+    }
 
     if (normals.y <= 0.5) {
         topM = sampleMaterial(side, uv_top);
+    } else {
+        topM = sampleMaterial(top, uv_bottom);
     }
 
     vec3 weights = abs(normals) / noiseScale;

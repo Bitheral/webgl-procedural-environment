@@ -1,0 +1,7 @@
+lockfileVersion: 5.4
+
+specifiers:
+  '@bitheral/marching-cubes': ^1.0.0
+
+dependencies:
+  '@bitheral/marching-cubes': link:node_modules/@bitheral/marching-cubes

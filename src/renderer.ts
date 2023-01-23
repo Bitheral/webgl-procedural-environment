@@ -8,7 +8,7 @@
 // needed in the renderer process.
 
 // Get threejs
-import { Vector3, DirectionalLight, PerspectiveCamera, ShaderMaterial, Texture, AxesHelper } from 'three';
+import { Vector3, DirectionalLight, PerspectiveCamera, ShaderMaterial, Texture, AxesHelper, Intersection, Vector } from 'three';
 import THREE = require('three');
 
 import Stats = require('stats.js');
@@ -35,6 +35,36 @@ interface PBRMaterial {
     displacement: Texture;
     ao: Texture;
 }
+
+
+
+const gui = new GUI();
+
+// Example Three.js code
+const scene = new THREE.Scene();
+const camera = new PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000 );
+const renderer = new THREE.WebGLRenderer();
+const INT16 = {
+    MIN: -32768,
+    MAX: 32767
+}
+
+const volumeSize = 32;
+//const volume = new Volume(volumeSize, new Vector3(0, 0, 0));
+//const volumeMesh = volume.mergeGeometries(volume.March());
+//volume.mergeGeometries(volume.March());
+
+const volume = new VolumeNew(volumeSize, new Vector3(0, 0, 0));
+
+const ObjectScattering = {
+    density: 100,
+    points: [] as Vector3[],
+    intersects: [] as Intersection[]
+}
+
+const orbit_controls = new OrbitControls(camera, renderer.domElement)
+//const fly_controls = new FlyControls(camera, renderer.domElement)
+
 function createPBRMaterial(texturePath: string): PBRMaterial {
 
     const pbrMaterial: PBRMaterial = {
@@ -80,27 +110,140 @@ function createPBRMaterial(texturePath: string): PBRMaterial {
     return pbrMaterial
 }
 
+function distributeObjects(pointCount: number) {
+    const objects = [];
 
-const gui = new GUI();
+    for(let i = 0; i < pointCount; i++) {
+        const position = new Vector3(
+            Math.random() * (volumeSize - 1),
+            Math.random() * volumeSize,
+            Math.random() * (volumeSize - 1)
+        );
+        
+        const xCoord = (position.x / volumeSize) * volume.noiseScale + volume.noiseOffset.x;
+        const yCoord = (position.y / volumeSize) * volume.noiseScale + volume.noiseOffset.y;
+        const zCoord = (position.z / volumeSize) * volume.noiseScale + volume.noiseOffset.z;
 
-// Example Three.js code
-const scene = new THREE.Scene();
-const camera = new PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000 );
-const renderer = new THREE.WebGLRenderer();
-const INT16 = {
-    MIN: -32768,
-    MAX: 32767
+        const noiseValue = volume.noise.perlin["3D"](xCoord, yCoord, zCoord);
+
+        // Get density around this point
+        let kernel = [];
+        for(let x = -1; x <= 1; x++) {
+            for(let y = -1; y <= 1; y++) {
+                for(let z = -1; z <= 1; z++) {
+                    const xCoord = ((position.x + x) / volumeSize) * volume.noiseScale + volume.noiseOffset.x;
+                    const yCoord = ((position.y + y) / volumeSize) * volume.noiseScale + volume.noiseOffset.y;
+                    const zCoord = ((position.z + z) / volumeSize) * volume.noiseScale + volume.noiseOffset.z;
+
+                    const noiseValue = volume.noise.perlin["3D"](xCoord, yCoord, zCoord);
+                    kernel.push(noiseValue);
+                }
+            }
+        }
+
+        const kernelSum = kernel.reduce((a, b) => a + b, 0);
+
+        const heightBias = (position.y / volumeSize);
+
+        const density = heightBias + (position.y / volume.yBias) - noiseValue;
+
+        // const viablePoint = density > volume.densityThreshold && density - kernelSum < 0.1;
+        const viablePoint = true;
+
+        // Based on the density, add the point to the array
+        if(viablePoint) 
+            objects.push(position);
+    }
+
+    return objects;
 }
 
-const volumeSize = 32;
-//const volume = new Volume(volumeSize, new Vector3(0, 0, 0));
-//const volumeMesh = volume.mergeGeometries(volume.March());
-//volume.mergeGeometries(volume.March());
+interface ObjectScatters {
+    points: Vector3[];
+    intersects: Intersection[];
+}
+function snapToTerrain(volumeMesh: THREE.Mesh, points: Vector3[]): ObjectScatters {
+    // Vertices is a flat array of x, y, z, x, y, z, x, y, z, etc
+    // Points is an array of Vector3s
 
-const volume = new VolumeNew(volumeSize, new Vector3(0, 0, 0));
+    // For each point, raycast down to the terrain and set the y value to the y value of the terrain
+    const newPoints = [];
+    const intersections = [];
 
-const orbit_controls = new OrbitControls(camera, renderer.domElement)
-//const fly_controls = new FlyControls(camera, renderer.domElement)
+    for(const point of points) {
+        const raycaster = new THREE.Raycaster(point, new Vector3(0, -1, 0), 0, volumeSize);
+        const intersects = raycaster.intersectObject(volumeMesh);
+
+        if(intersects.length > 0) {
+            const newPoint = new Vector3(point.x, intersects[0].point.y, point.z);
+            newPoints.push(newPoint);
+            intersections.push(intersects[0]);
+        }
+    }
+
+    return {
+        points: newPoints,
+        intersects: intersections
+    };
+}
+
+function createInstancedMesh(geometry: THREE.BufferGeometry, material: THREE.Material, scattering: ObjectScatters): THREE.InstancedMesh {
+
+    // Valid points are the points that have their intersects.face.normal.normalized().y > 0;
+    const validPoints = [];
+
+
+    for(let i = 0; i < scattering.intersects.length; i++) {
+        const normal = scattering.intersects[i].face.normal.clone().normalize();
+
+        if(normal.y >= 0.9) {
+            validPoints.push(scattering.points[i]);
+        }
+    }
+
+    const count = validPoints.length;
+    const positions = validPoints;
+
+    // Make sure that the positions is within 1 and volumeSize - 1
+    for(const position of positions) {
+        if(position.x < 1 || position.x > volumeSize - 1) {
+            position.x = Math.random() * (volumeSize - 1);
+        }
+        if(position.y < 1 || position.y > volumeSize - 1) {
+            position.y = (Math.random() * volumeSize) - (volume.yBias / volumeSize);
+        }
+        if(position.z < 1 || position.z > volumeSize - 1) {
+            position.z = Math.random() * (volumeSize - 1);
+        }
+    }
+
+
+
+    const mesh = new THREE.InstancedMesh(geometry, material, count);
+    mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+
+    const dummy = new THREE.Object3D();
+    for(let i = 0; i < count; i++) {
+        if(positions.length == 0) {
+            dummy.position.set(
+                Math.random() * (volumeSize - 1),
+                Math.random() * volumeSize,
+                Math.random() * (volumeSize - 1)
+            );
+        }
+        else {
+            dummy.position.set(
+                positions[i].x,
+                positions[i].y,
+                positions[i].z
+            );
+        }
+
+        dummy.updateMatrix();
+        mesh.setMatrixAt(i, dummy.matrix);
+    }
+    return mesh;
+}
 
 
 renderer.setSize( window.innerWidth, window.innerHeight );
@@ -162,11 +305,22 @@ const material = new ShaderMaterial({
 const mesh = new THREE.Mesh(volume.geometry, material);
 mesh.position.set(0,0,0);
 
+
 // volumeSize only increases the resolution of the mesh, not the volume
 // Apply a scale to the mesh so that the world is 32/volumeSize units wide, and deep
 // mesh.scale.multiplyScalar(volumeSize).multiplyScalar((1/volumeSize) * 4);
 
 scene.add(mesh);
+
+ObjectScattering.points = distributeObjects(ObjectScattering.density);
+const objectScatters = snapToTerrain(mesh, ObjectScattering.points);
+
+ObjectScattering.points = objectScatters.points;
+ObjectScattering.intersects = objectScatters.intersects;
+
+let sphereMesh = createInstancedMesh(new THREE.SphereGeometry(Math.random(), 16, 16), new THREE.MeshBasicMaterial({color: 0x00ff00}), ObjectScattering);
+sphereMesh.name = "instancedMesh";
+scene.add(sphereMesh);
 
 function updateMesh() {
     volume.update("geometry");
@@ -214,6 +368,26 @@ volumeFolder.add(volume, 'densityThreshold', 0, 1).onChange(() => updateMesh()).
 volumeFolder.add(volume, 'yBias', 0, volumeSize).onChange(() => updateMesh()).name('Y Bias');
 volumeFolder.add(volume, 'showEdges').onChange(() => updateMesh()).name('Show Edges');
 volumeFolder.add(volume, 'edgeSharpness', 0, 10).onChange(() => updateMesh()).name('Edge Sharpness');
+
+// Create an item in the volume folder where we can change the density of the volumePoints, using a slider
+volumeFolder.add(ObjectScattering, 'density', 1, 10000).onChange((value) => {
+    // Remove any object named "instancedMesh"
+    scene.remove(scene.getObjectByName("instancedMesh"));
+
+    // Generate new points
+    ObjectScattering.points = distributeObjects(value);
+    const objectScatters = snapToTerrain(mesh, ObjectScattering.points);
+
+    ObjectScattering.points = objectScatters.points;
+    ObjectScattering.intersects = objectScatters.intersects;
+
+    // Create a new instanced mesh
+    sphereMesh = createInstancedMesh(new THREE.SphereGeometry(Math.random(), 16, 16), new THREE.MeshBasicMaterial({color: 0x00ff00}), ObjectScattering);
+    sphereMesh.name = "instancedMesh";
+
+    // Add the new instanced mesh to the scene
+    scene.add(sphereMesh);
+}).name('Voroni Density');
 
 // Add a button to gui to regenerate the volume
 gui.add(obj, 'Regenerate').onFinishChange(() => updateMesh());
