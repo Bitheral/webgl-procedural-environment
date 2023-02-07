@@ -10,8 +10,8 @@ function createWindow() {
       nodeIntegration: true,
       contextIsolation: false
     },
-    width: 800,
-    height: 600,
+    width: 1280,
+    height: 720,
     icon: path.join(__dirname, "assets", "icons", "icon.png") || undefined,
   });
 

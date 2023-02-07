@@ -8,7 +8,12 @@
 // needed in the renderer process.
 
 // Get threejs
-import { Vector3, DirectionalLight, PerspectiveCamera, ShaderMaterial, Texture, AxesHelper, Intersection, Vector } from 'three';
+import { Vector3, DirectionalLight, PerspectiveCamera, ShaderMaterial, Texture, AxesHelper, Intersection, Vector, Vector2, MeshBasicMaterial, BufferGeometry, LoadingManager } from 'three';
+// import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js';
+
+// Import OBJLoader for electron
+import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js';
+
 import THREE = require('three');
 
 import Stats = require('stats.js');
@@ -26,7 +31,8 @@ import OrbitControls = require('three-orbitcontrols');
 import FlyControls = require('three-flycontrols');
 
 import MarchingCubes from "@bitheral/marching-cubes";
-import { Volume, VolumeNew} from '@bitheral/marching-cubes/dist/MarchingCubes/Volume';
+import { Volume, VolumeNew } from '@bitheral/marching-cubes/dist/MarchingCubes/Volume';
+import { Noise, NoiseData } from '@bitheral/marching-cubes/dist/Noise';
 
 interface PBRMaterial {
     albedo: Texture;
@@ -34,6 +40,12 @@ interface PBRMaterial {
     roughness: Texture;
     displacement: Texture;
     ao: Texture;
+}
+
+interface Shader {
+    vertexShader: string,
+    fragmentShader: string,
+    glslVersion: THREE.GLSLVersion
 }
 
 
@@ -50,13 +62,79 @@ const INT16 = {
 }
 
 const volumeSize = 32;
-//const volume = new Volume(volumeSize, new Vector3(0, 0, 0));
-//const volumeMesh = volume.mergeGeometries(volume.March());
-//volume.mergeGeometries(volume.March());
+const volumesAmount = 1;
 
-const volume = new VolumeNew(volumeSize, new Vector3(0, 0, 0));
+const volumes = [] as VolumeNew[];
+for(let z = 0; z < volumesAmount; z++) {
+    for(let x = 0; x < volumesAmount; x++) {
 
-const ObjectScattering = {
+        const pos = new Vector3(x, 0, z);
+
+        const volume = new VolumeNew(volumeSize, pos);
+        volume.March();
+
+        volumes.push(volume);
+    }
+}
+
+for(let i = 0; i < volumes.length; i++) {
+    const volume = volumes[i];
+
+    // Get neighbours (including corners)
+    const neighbours = {
+        front: null as VolumeNew,
+        back: null as VolumeNew,
+        left: null as VolumeNew,
+        right: null as VolumeNew,
+        frontLeft: null as VolumeNew,
+        frontRight: null as VolumeNew,
+        backLeft: null as VolumeNew,
+        backRight: null as VolumeNew
+    }
+
+    const x = i % volumesAmount;
+    const z = Math.floor(i / volumesAmount);
+
+    if(x > 0) {
+        neighbours.left = volumes[i - 1];
+    }
+
+    if(x < volumesAmount - 1) {
+        neighbours.right = volumes[i + 1];
+    }
+
+    if(z > 0) {
+        neighbours.back = volumes[i - volumesAmount];
+    }
+
+    if(z < volumesAmount - 1) {
+        neighbours.front = volumes[i + volumesAmount];
+    }
+
+    if(neighbours.left && neighbours.back) {
+        neighbours.backLeft = volumes[i - volumesAmount - 1];
+    }
+
+    if(neighbours.right && neighbours.back) {
+        neighbours.backRight = volumes[i - volumesAmount + 1];
+    }
+
+    if(neighbours.left && neighbours.front) {
+        neighbours.frontLeft = volumes[i + volumesAmount - 1];
+    }
+
+    if(neighbours.right && neighbours.front) {
+        neighbours.frontRight = volumes[i + volumesAmount + 1];
+    }
+
+    volume.neighbours = neighbours;
+}
+
+
+
+const volume = volumes[0];
+
+let ObjectScattering = {
     density: 100,
     points: [] as Vector3[],
     intersects: [] as Intersection[]
@@ -65,7 +143,15 @@ const ObjectScattering = {
 const orbit_controls = new OrbitControls(camera, renderer.domElement)
 //const fly_controls = new FlyControls(camera, renderer.domElement)
 
-function createPBRMaterial(texturePath: string): PBRMaterial {
+function createShader(shaderName: string): Shader {
+    return {
+        vertexShader: fs.readFileSync(path.join(__dirname, `src/assets/shader/${shaderName}/vertex.glsl`), 'utf-8'),
+        fragmentShader: fs.readFileSync(path.join(__dirname, `src/assets/shader/${shaderName}/fragment.glsl`), 'utf-8'),
+        glslVersion: THREE.GLSL3
+    }
+}
+
+function createPBRMaterial(texturePath: string, fileExtension: string = "png"): PBRMaterial {
 
     const pbrMaterial: PBRMaterial = {
         albedo: null,
@@ -76,8 +162,8 @@ function createPBRMaterial(texturePath: string): PBRMaterial {
     }
 
     for(const file of fs.readdirSync(texturePath)) {
-        if(!file.endsWith('.png')) {
-            throw new Error(`File ${file} is not a png file`);
+        if(!file.endsWith('.' + fileExtension)) {
+            throw new Error(`File ${file} is not a ${fileExtension} file`);
         }
 
         if(!['albedo', 'normal', 'roughness', 'displacement', 'ao'].includes(file.split('.')[0])) {
@@ -109,6 +195,9 @@ function createPBRMaterial(texturePath: string): PBRMaterial {
 
     return pbrMaterial
 }
+
+// Return a tuple of the positions and the amount of points
+
 
 function distributeObjects(pointCount: number) {
     const objects = [];
@@ -204,47 +293,25 @@ function createInstancedMesh(geometry: THREE.BufferGeometry, material: THREE.Mat
     const count = validPoints.length;
     const positions = validPoints;
 
-    // Make sure that the positions is within 1 and volumeSize - 1
-    for(const position of positions) {
-        if(position.x < 1 || position.x > volumeSize - 1) {
-            position.x = Math.random() * (volumeSize - 1);
-        }
-        if(position.y < 1 || position.y > volumeSize - 1) {
-            position.y = (Math.random() * volumeSize) - (volume.yBias / volumeSize);
-        }
-        if(position.z < 1 || position.z > volumeSize - 1) {
-            position.z = Math.random() * (volumeSize - 1);
-        }
-    }
-
-
-
     const mesh = new THREE.InstancedMesh(geometry, material, count);
-    mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
 
-    const dummy = new THREE.Object3D();
     for(let i = 0; i < count; i++) {
-        if(positions.length == 0) {
-            dummy.position.set(
-                Math.random() * (volumeSize - 1),
-                Math.random() * volumeSize,
-                Math.random() * (volumeSize - 1)
-            );
-        }
-        else {
-            dummy.position.set(
-                positions[i].x,
-                positions[i].y,
-                positions[i].z
-            );
-        }
+        const position = positions[i];
+        const translation = new THREE.Matrix4().makeTranslation(position.x, position.y, position.z);
+        const rotation = new THREE.Matrix4().makeRotationY(Math.random() * Math.PI * 2);
+        const scale = new THREE.Matrix4().makeScale(1, 1, 1);
 
-        dummy.updateMatrix();
-        mesh.setMatrixAt(i, dummy.matrix);
+        const matrix = new THREE.Matrix4();
+        matrix.multiply(translation);
+        matrix.multiply(rotation);
+        matrix.multiply(scale);
+
+        mesh.setMatrixAt(i, matrix);
     }
+
+
     return mesh;
 }
-
 
 renderer.setSize( window.innerWidth, window.innerHeight );
 
@@ -264,8 +331,9 @@ scene.add( axesHelper );
 const topTexture = createPBRMaterial(path.join(__dirname, 'src/assets/textures/Grass'));
 const sideTexture = createPBRMaterial(path.join(__dirname, 'src/assets/textures/Gravel'));
 
+const Rock002 = createPBRMaterial(path.join(__dirname, 'src/assets/textures/Rock002'), 'jpg');
 
-const material = new ShaderMaterial({
+const volumeMaterial = new ShaderMaterial({
     uniforms: {
         top: {
             value: {
@@ -298,99 +366,228 @@ const material = new ShaderMaterial({
             }
         }
     },
-    vertexShader: fs.readFileSync(path.join(__dirname, 'src/assets/shader/triplanar/vertex.glsl'), 'utf8'),
-    fragmentShader: fs.readFileSync(path.join(__dirname, 'src/assets/shader/triplanar/fragment.glsl'), 'utf8'),
+    ...createShader("triplanar")
+
 })
 
-const mesh = new THREE.Mesh(volume.geometry, material);
+const oldRock = new MeshBasicMaterial({ color: 0xff0000 });
+// For each volume in volumes, merge the geometries
+const volumeGeos = [] as BufferGeometry[];
+for(const volume of volumes) {
+    const geo = volume.geometry;
+    volumeGeos.push(geo);
+}
+
+const mergedGeo = Volume.mergeGeometries(volumeGeos);
+const mesh = new THREE.Mesh(mergedGeo || volume.geometry, volumeMaterial);
 mesh.position.set(0,0,0);
-
-
-// volumeSize only increases the resolution of the mesh, not the volume
-// Apply a scale to the mesh so that the world is 32/volumeSize units wide, and deep
-// mesh.scale.multiplyScalar(volumeSize).multiplyScalar((1/volumeSize) * 4);
-
 scene.add(mesh);
 
 ObjectScattering.points = distributeObjects(ObjectScattering.density);
-const objectScatters = snapToTerrain(mesh, ObjectScattering.points);
-
-ObjectScattering.points = objectScatters.points;
-ObjectScattering.intersects = objectScatters.intersects;
-
-let sphereMesh = createInstancedMesh(new THREE.SphereGeometry(Math.random(), 16, 16), new THREE.MeshBasicMaterial({color: 0x00ff00}), ObjectScattering);
-sphereMesh.name = "instancedMesh";
-scene.add(sphereMesh);
-
-function updateMesh() {
-    volume.update("geometry");
-    mesh.geometry.dispose();
-    mesh.geometry = volume.geometry;
+ObjectScattering = {
+    ...ObjectScattering,
+    ...snapToTerrain(mesh, ObjectScattering.points)
 }
 
-const obj = {
-    Regenerate: () => {
-        volume.seed = Date.now();
-        volume.noiseSeed = Volume.createSeed(volume.seed);
-    },
-    IncrementXNoise: () => {
-        volume.noiseOffset.x += 0.25;
-    },
-    IncrementYNoise: () => {
-        volume.noiseOffset.y += 0.25;
-    },
-    IncrementZNoise: () => {
-        volume.noiseOffset.z += 0.25;
+const MaterialUniform = (material: PBRMaterial) => {
+    return {
+        albedo: material.albedo,
+        normal: material.normal,
+        roughness: material.roughness,
+        displacement: material.displacement,
+        ao: material.ao
     }
 }
+   
+// Load model from OBJ file
+const loader = new OBJLoader()
+loader.load(path.join(__dirname, 'src/assets/models/Rock002.obj'), (object) => {
+    const rockMaterial = new ShaderMaterial({
+        uniforms: {
+            mat: {
+                value: {
+                    ...MaterialUniform(Rock002)
+                }
+            },
+        },
+        ...createShader("objectScatter")
+    })
 
+    object.traverse((child) => {
+        if (child instanceof BufferGeometry) {
+            const mesh = createInstancedMesh(child, rockMaterial, ObjectScattering);
+            mesh.name = "instancedMesh";
+            scene.add(mesh);
+        }
+    });
+});
+
+
+// let sphereMesh = createInstancedMesh(new THREE.SphereGeometry((Math.random() + 1) * 0.5, 32, 32), rockMaterial, ObjectScattering);
+// sphereMesh.name = "instancedMesh";
+// scene.add(sphereMesh);
+
+
+function updateMesh() {
+    for(const volume of volumes) {
+        volume.update("noise");
+        volume.update("geometry");
+    }
+
+    mesh.geometry.dispose();
+    mesh.geometry = volume.geometry;
+
+    const volumeGeos = volumes.map(volume => volume.geometry);
+    const mergedGeo = Volume.mergeGeometries(volumeGeos);
+    mesh.geometry = mergedGeo;
+}
+
+
+//#region GUI
 gui.add(mesh.position, 'x', -volumeSize, volumeSize).name('Mesh Position (X axis)');
 gui.add(mesh.position, 'y', -volumeSize, volumeSize).name('Mesh Position (Y axis)');
 gui.add(mesh.position, 'z', -volumeSize, volumeSize).name('Mesh Position (Z axis)');
 
-// Create a gui folder for the volume's noise settings
-const noiseFolder = gui.addFolder('Noise Settings');
-noiseFolder.add(volume, 'seed', INT16.MIN, INT16.MAX).onChange(() => updateMesh()).name('Noise Seed');
-noiseFolder.add(volume, 'noiseScale', 0.01, 10).onChange(() => updateMesh()).name('Noise Scale');
-
-{
-const noiseOffsetFolder = noiseFolder.addFolder('Noise Offset');
-noiseOffsetFolder.add(volume.noiseOffset, 'x', INT16.MIN, INT16.MAX).onChange(() => updateMesh());
-noiseOffsetFolder.add(volume.noiseOffset, 'y', INT16.MIN, INT16.MAX).onChange(() => updateMesh());
-noiseOffsetFolder.add(volume.noiseOffset, 'z', INT16.MIN, INT16.MAX).onChange(() => updateMesh());
-noiseOffsetFolder.add(obj, 'IncrementXNoise').name('Increment Noise Offset (X axis)').onChange(() => updateMesh());
-noiseOffsetFolder.add(obj, 'IncrementYNoise').name('Increment Noise Offset (Y axis)').onChange(() => updateMesh());
-noiseOffsetFolder.add(obj, 'IncrementZNoise').name('Increment Noise Offset (Z axis)').onChange(() => updateMesh());
+const ob = {
+    seed: volume.seed,
 }
 
+const noiseFolder = gui.addFolder('Noise Settings');
+noiseFolder.add(ob, 'seed', -65566, 65536).onChange(() => {
+    volume.seed = ob.seed;
+    volume.noiseSeed = Volume.createSeed(volume.seed);
+    updateMesh();
+}).name('Noise Seed');
+let noiseConfigsFolder = noiseFolder.addFolder('Noise Configs');
+
+const params = {
+    'configs': [
+        {
+            'scale': 1,
+            'octaves': 4,
+            'persistence': 0.5,
+            'lacunarity': 2,
+            'offset': new Vector3(0,0,0),
+            'open': false
+        },
+    ],
+    'densityThreshold': volume.densityThreshold,
+    'yBias': volume.yBias,
+    'showEdges': volume.showEdges,
+    'edgeSharpness': volume.edgeSharpness,
+
+    actions: {
+        addConfig: () => {
+            params.configs.push({
+                'scale': 1,
+                'octaves': 4,
+                'persistence': 0.5,
+                'lacunarity': 2,
+                'offset': new Vector3(0,0,0),
+                'open': false
+            });
+
+            // Refresh the folder so that the new config is added
+            noiseFolder.removeFolder(noiseConfigsFolder);
+            noiseConfigsFolder = noiseFolder.addFolder('Noise Configs');
+            noiseConfigsFolder.open();
+            params.actions.createConfigFolders()
+
+            params.actions.regenerate();
+        },
+        removeConfig: () => {
+            if(params.configs.length <= 1) return;
+
+            params.configs.pop();
+            noiseFolder.removeFolder(noiseConfigsFolder);
+            noiseConfigsFolder = noiseFolder.addFolder('Noise Configs');
+            noiseConfigsFolder.open();
+
+            params.actions.createConfigFolders();
+
+            params.actions.regenerate();
+        },
+        updateConfig(index: number) {
+            const config = params.configs[index];
+            for(const volume of volumes) {
+                volume.noiseConfigs[index] = config;
+            }
+
+            updateMesh();
+        },
+        update(key: string) {
+            for(const volume of volumes) {
+                switch(key) {
+                    case 'seed':
+                        volume.seed = ob.seed;
+                        volume.noiseSeed = Volume.createSeed(volume.seed);
+                        break;
+                    case 'densityThreshold':
+                        volume.densityThreshold = params.densityThreshold;
+                        break;
+                    case 'yBias':
+                        volume.yBias = params.yBias;
+                        break;
+                    case 'showEdges':
+                        volume.showEdges = params.showEdges;
+                        break;
+                    case 'edgeSharpness':
+                        volume.edgeSharpness = params.edgeSharpness;
+                        break;
+                                
+                    default:
+                        break;
+                }
+            }
+            
+            updateMesh();
+        },
+        regenerate: () => {
+            for(const volume of volumes) {
+                volume.noiseConfigs = params.configs;
+                volume.noiseSeed = Volume.createSeed(volume.seed);
+            }
+
+            updateMesh();
+        },
+        createConfigFolders: () => {
+            for(let i = 0; i < params.configs.length; i++) {
+                const config = params.configs[i];
+                const configFolder = noiseConfigsFolder.addFolder(`Config ${i+1}`);
+                            
+                if(config.open) {
+                    configFolder.open();
+                }
+        
+                configFolder.add(config, 'scale', 0.1, 10).name('Scale').onChange(() => params.actions.updateConfig(i));
+                configFolder.add(config, 'octaves', 1, 10).name('Octaves').onChange(() => params.actions.updateConfig(i));
+                configFolder.add(config, 'persistence', 0.1, 1).name('Persistence').onChange(() => params.actions.updateConfig(i));
+                configFolder.add(config, 'lacunarity', 1, 10).name('Lacunarity').onChange(() => params.actions.updateConfig(i));
+                const offsetFolder = configFolder.addFolder('Offset');
+                offsetFolder.add(config.offset, 'x', -volumeSize, volumeSize).name('X').onChange(() => params.actions.updateConfig(i));
+                offsetFolder.add(config.offset, 'y', -volumeSize, volumeSize).name('Y').onChange(() => params.actions.updateConfig(i));
+                offsetFolder.add(config.offset, 'z', -volumeSize, volumeSize).name('Z').onChange(() => params.actions.updateConfig(i));
+        
+                config.open = !configFolder.closed;
+            }
+            noiseConfigsFolder.add(params.actions, 'addConfig').onFinishChange(() => updateMesh()).name("Add");
+            noiseConfigsFolder.add(params.actions, 'removeConfig').onFinishChange(() => updateMesh()).name("Remove");
+        }
+    }
+}
+
+// noiseFolder.add(params, 'noiseScale', 0.01, 10).onChange(() => params.actions.update("noiseScale")).name('Noise Scale');
+
 const volumeFolder = gui.addFolder('Volume Settings');
-volumeFolder.add(volume, 'densityThreshold', 0, 1).onChange(() => updateMesh()).name('Density Threshold');
-volumeFolder.add(volume, 'yBias', 0, volumeSize).onChange(() => updateMesh()).name('Y Bias');
-volumeFolder.add(volume, 'showEdges').onChange(() => updateMesh()).name('Show Edges');
-volumeFolder.add(volume, 'edgeSharpness', 0, 10).onChange(() => updateMesh()).name('Edge Sharpness');
+volumeFolder.add(params, 'densityThreshold', -1, 1).onChange(() => params.actions.update("densityThreshold")).name('Density Threshold');
+volumeFolder.add(params, 'yBias', 0, volumeSize).onChange(() => params.actions.update("yBias")).name('Y Bias');
+volumeFolder.add(params, 'showEdges').onChange(() => params.actions.update("showEdges")).name('Show Edges');
+volumeFolder.add(params, 'edgeSharpness', 0, 100).onChange(() => params.actions.update("edgeSharpness")).name('Edge Sharpness');
+volumeFolder.add(params.actions, 'regenerate').name('Regenerate');
 
-// Create an item in the volume folder where we can change the density of the volumePoints, using a slider
-volumeFolder.add(ObjectScattering, 'density', 1, 10000).onChange((value) => {
-    // Remove any object named "instancedMesh"
-    scene.remove(scene.getObjectByName("instancedMesh"));
+params.actions.createConfigFolders()
 
-    // Generate new points
-    ObjectScattering.points = distributeObjects(value);
-    const objectScatters = snapToTerrain(mesh, ObjectScattering.points);
-
-    ObjectScattering.points = objectScatters.points;
-    ObjectScattering.intersects = objectScatters.intersects;
-
-    // Create a new instanced mesh
-    sphereMesh = createInstancedMesh(new THREE.SphereGeometry(Math.random(), 16, 16), new THREE.MeshBasicMaterial({color: 0x00ff00}), ObjectScattering);
-    sphereMesh.name = "instancedMesh";
-
-    // Add the new instanced mesh to the scene
-    scene.add(sphereMesh);
-}).name('Voroni Density');
-
-// Add a button to gui to regenerate the volume
-gui.add(obj, 'Regenerate').onFinishChange(() => updateMesh());
+//#endregion
 
 // Camera orbit around center of the volume
 function animate() {
@@ -405,8 +602,6 @@ function render() {
 }
 
 animate()
-
-
 
 // Event Listeners
 window.addEventListener('resize', onWindowResize, false)

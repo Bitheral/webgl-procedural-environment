@@ -33,6 +33,8 @@ varying vec2 uvs;
 varying vec3 normals;
 varying vec3 worldPosition;
 
+varying vec3 volumeDensityColor;
+
 SampledMaterial sampleMaterial(Material material, vec2 uv) {
     SampledMaterial sampledMaterial;
     sampledMaterial.albedo = texture2D(material.albedo, uv);
@@ -49,6 +51,8 @@ vec4 calculateLight(SampledMaterial material) {
 
 }
 
+out vec4 final;
+
 void main() {
 
     int DEBUG = 0;
@@ -64,7 +68,7 @@ void main() {
     vec2 uv_right = (worldPosition.yz / volumeScale);
 
     vec2 uv_top = worldPosition.xz / volumeScale;
-    vec2 uv_bottom = (worldPosition.xz / volumeScale);
+    vec2 uv_bottom = (worldPosition.zx / volumeScale);
 
     // Based on the normals, we can determine which side of the cube we are on
     // and sample the correct material
@@ -81,9 +85,9 @@ void main() {
     }
 
     if (normals.y <= 0.5) {
-        topM = sampleMaterial(side, uv_top);
+        topM = sampleMaterial(side, uv_bottom);
     } else {
-        topM = sampleMaterial(top, uv_bottom);
+        topM = sampleMaterial(top, uv_top);
     }
 
     vec3 weights = abs(normals) / noiseScale;
@@ -94,5 +98,6 @@ void main() {
     vec4 s = calculateLight(sideM);
 
     vec4 color = DEBUG == 1 ? vec4(weights, 1.0) : (f * weights.x) + (t * weights.y) + (s * weights.z);
-    gl_FragColor = color;
+    
+    final = vec4(1.0) * color;
 }
