@@ -8,11 +8,10 @@
 // needed in the renderer process.
 
 // Get threejs
-import { Vector3, DirectionalLight, PerspectiveCamera, ShaderMaterial, Texture, AxesHelper, Intersection, Vector, Vector2, MeshBasicMaterial, BufferGeometry, LoadingManager } from 'three';
-// import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js';
+import { Vector3, DirectionalLight, PerspectiveCamera, ShaderMaterial, Texture, AxesHelper, Intersection, Vector, Vector2, MeshBasicMaterial, BufferGeometry, LoadingManager, Object3D } from 'three';
 
-// Import OBJLoader for electron
-import { OBJLoader } from 'three/examples/jsm/loaders/OBJLoader.js';
+// Import objloader from local file
+import OBJLoader from './OBJLoader.js';
 
 import THREE = require('three');
 
@@ -22,17 +21,17 @@ import { GUI } from 'dat.gui';
 import fs = require('fs');
 import path = require('path')
 
-
-const stats = new Stats()
-stats.showPanel( 0 ); // 0: fps, 1: ms, 2: mb, 3+: custom
-document.body.appendChild( stats.dom );
-
 import OrbitControls = require('three-orbitcontrols');
-import FlyControls = require('three-flycontrols');
+import FirstPersonControls from './FlyCamera.js';
 
 import MarchingCubes from "@bitheral/marching-cubes";
 import { Volume, VolumeNew } from '@bitheral/marching-cubes/dist/MarchingCubes/Volume';
 import { Noise, NoiseData } from '@bitheral/marching-cubes/dist/Noise';
+
+
+const stats = new Stats()
+stats.showPanel( 0 ); // 0: fps, 1: ms, 2: mb, 3+: custom
+document.body.appendChild( stats.dom );
 
 interface PBRMaterial {
     albedo: Texture;
@@ -54,12 +53,9 @@ const gui = new GUI();
 
 // Example Three.js code
 const scene = new THREE.Scene();
+const clock = new THREE.Clock();
 const camera = new PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000 );
 const renderer = new THREE.WebGLRenderer();
-const INT16 = {
-    MIN: -32768,
-    MAX: 32767
-}
 
 const volumeSize = 32;
 const volumesAmount = 1;
@@ -86,6 +82,8 @@ for(let i = 0; i < volumes.length; i++) {
         back: null as VolumeNew,
         left: null as VolumeNew,
         right: null as VolumeNew,
+        top: null as VolumeNew,
+        
         frontLeft: null as VolumeNew,
         frontRight: null as VolumeNew,
         backLeft: null as VolumeNew,
@@ -141,12 +139,19 @@ let ObjectScattering = {
 }
 
 const orbit_controls = new OrbitControls(camera, renderer.domElement)
-//const fly_controls = new FlyControls(camera, renderer.domElement)
+//const fly_controls = new FirstPersonControls(camera, renderer.domElement);
+// fly_controls.movementSpeed = 150;
+// fly_controls.lookSpeed = 0.1;
+//fly_controls.activeLook = false;
+
+camera.position.set(volumeSize * 0.5, volumeSize * 0.5, -volumeSize * 1.5);
+camera.lookAt(volumeSize * 0.5, volumeSize * 0.5, volumeSize * 0.5);
+
 
 function createShader(shaderName: string): Shader {
     return {
-        vertexShader: fs.readFileSync(path.join(__dirname, `src/assets/shader/${shaderName}/vertex.glsl`), 'utf-8'),
-        fragmentShader: fs.readFileSync(path.join(__dirname, `src/assets/shader/${shaderName}/fragment.glsl`), 'utf-8'),
+        vertexShader: fs.readFileSync(path.join(__dirname, `./assets/shader/${shaderName}/vertex.glsl`), 'utf-8'),
+        fragmentShader: fs.readFileSync(path.join(__dirname, `./assets/shader/${shaderName}/fragment.glsl`), 'utf-8'),
         glslVersion: THREE.GLSL3
     }
 }
@@ -204,9 +209,9 @@ function distributeObjects(pointCount: number) {
 
     for(let i = 0; i < pointCount; i++) {
         const position = new Vector3(
-            Math.random() * (volumeSize - 1),
+            Math.random() * (volumeSize - 2) + 2,
             Math.random() * volumeSize,
-            Math.random() * (volumeSize - 1)
+            Math.random() * (volumeSize - 2) + 2
         );
         
         const xCoord = (position.x / volumeSize) * volume.noiseScale + volume.noiseOffset.x;
@@ -276,7 +281,16 @@ function snapToTerrain(volumeMesh: THREE.Mesh, points: Vector3[]): ObjectScatter
     };
 }
 
-function createInstancedMesh(geometry: THREE.BufferGeometry, material: THREE.Material, scattering: ObjectScatters): THREE.InstancedMesh {
+interface MatrixSettings {
+    // Position
+    // Rotation
+    // Scale
+    // All of these are Vector3s, but they can be null
+    position: Vector3 | null;
+    rotation: Vector3 | null;
+    scale: Vector3 | null;
+}
+function createInstancedMesh(geometry: THREE.BufferGeometry, material: THREE.Material, scattering: ObjectScatters, matrixSettings: MatrixSettings): THREE.InstancedMesh {
 
     // Valid points are the points that have their intersects.face.normal.normalized().y > 0;
     const validPoints = [];
@@ -298,8 +312,35 @@ function createInstancedMesh(geometry: THREE.BufferGeometry, material: THREE.Mat
     for(let i = 0; i < count; i++) {
         const position = positions[i];
         const translation = new THREE.Matrix4().makeTranslation(position.x, position.y, position.z);
-        const rotation = new THREE.Matrix4().makeRotationY(Math.random() * Math.PI * 2);
+
+        // Random rotation in any direction
+        const rotation = new THREE.Matrix4().makeRotationFromEuler(new THREE.Euler(Math.random() * Math.PI * 2, Math.random() * Math.PI * 2, Math.random() * Math.PI * 2));
+
         const scale = new THREE.Matrix4().makeScale(1, 1, 1);
+
+        const matrixP = new THREE.Matrix4();
+
+        if(matrixSettings.position) {
+            matrixP.makeTranslation(matrixSettings.position.x, matrixSettings.position.y, matrixSettings.position.z);
+        }
+
+        const matrixR = new THREE.Matrix4();
+
+        if(matrixSettings.rotation) {
+            matrixR.makeRotationFromEuler(new THREE.Euler(matrixSettings.rotation.x, matrixSettings.rotation.y, matrixSettings.rotation.z));
+        }
+
+        const matrixS = new THREE.Matrix4();
+
+        if(matrixSettings.scale) {
+            matrixS.makeScale(matrixSettings.scale.x, matrixSettings.scale.y, matrixSettings.scale.z);
+        }
+
+
+        translation.multiply(matrixP);
+        rotation.multiply(matrixR);
+        scale.multiply(matrixS);
+
 
         const matrix = new THREE.Matrix4();
         matrix.multiply(translation);
@@ -319,6 +360,7 @@ renderer.setClearColor( 0x000000, 0);
 document.getElementById('webgl').appendChild(renderer.domElement);
 
 orbit_controls.target = new Vector3(0,0,0).addScalar(volumeSize).divideScalar(2);
+//fly_controls.target = new Vector3(0,0,0).addScalar(volumeSize).divideScalar(2);
 
 const light = new DirectionalLight(0xffffff, 1);
 light.position.set(0, 1, 0);
@@ -328,36 +370,41 @@ scene.add(light);
 const axesHelper = new AxesHelper( 5 );
 scene.add( axesHelper );
 
-const topTexture = createPBRMaterial(path.join(__dirname, 'src/assets/textures/Grass'));
-const sideTexture = createPBRMaterial(path.join(__dirname, 'src/assets/textures/Gravel'));
+const topTexture = createPBRMaterial(path.join(__dirname, './assets/textures/Grass'));
+const sideTexture = createPBRMaterial(path.join(__dirname, './assets/textures/Rock'));
+const bottomTexture = createPBRMaterial(path.join(__dirname, './assets/textures/Gravel'));
 
-const Rock002 = createPBRMaterial(path.join(__dirname, 'src/assets/textures/Rock002'), 'jpg');
+const Rock002 = createPBRMaterial(path.join(__dirname, './assets/textures/Rock002'), 'jpg');
+
+const MaterialUniform = (material: PBRMaterial) => {
+    return {
+        albedo: material.albedo,
+        normal: material.normal,
+        roughness: material.roughness,
+        displacement: material.displacement,
+        ao: material.ao
+    }
+}
 
 const volumeMaterial = new ShaderMaterial({
     uniforms: {
         top: {
-            value: {
-                albedo: topTexture.albedo,
-                normal: topTexture.normal,
-                roughness: topTexture.roughness,
-                displacement: topTexture.displacement,
-                ao: topTexture.ao
-            }
+            value: MaterialUniform(topTexture)
         },
-        side: {
-            value: {
-                albedo: sideTexture.albedo,
-                normal: sideTexture.normal,
-                roughness: sideTexture.roughness,
-                displacement: sideTexture.displacement,
-                ao: sideTexture.ao
-            }
+        bottom: {
+            value: MaterialUniform(sideTexture)
         },
+        xAx: {
+            value: MaterialUniform(sideTexture)
+        },
+        zAx: {
+            value: MaterialUniform(sideTexture)
+        },            
         noiseScale: {
             value: volume.noiseScale
         },
         volumeScale: {
-            value: volume.getScale()
+            value: volumeSize * volumesAmount
         },
         worldLight: {
             value: {
@@ -382,51 +429,9 @@ const mergedGeo = Volume.mergeGeometries(volumeGeos);
 const mesh = new THREE.Mesh(mergedGeo || volume.geometry, volumeMaterial);
 mesh.position.set(0,0,0);
 scene.add(mesh);
-
-ObjectScattering.points = distributeObjects(ObjectScattering.density);
-ObjectScattering = {
-    ...ObjectScattering,
-    ...snapToTerrain(mesh, ObjectScattering.points)
-}
-
-const MaterialUniform = (material: PBRMaterial) => {
-    return {
-        albedo: material.albedo,
-        normal: material.normal,
-        roughness: material.roughness,
-        displacement: material.displacement,
-        ao: material.ao
-    }
-}
    
 // Load model from OBJ file
 const loader = new OBJLoader()
-loader.load(path.join(__dirname, 'src/assets/models/Rock002.obj'), (object) => {
-    const rockMaterial = new ShaderMaterial({
-        uniforms: {
-            mat: {
-                value: {
-                    ...MaterialUniform(Rock002)
-                }
-            },
-        },
-        ...createShader("objectScatter")
-    })
-
-    object.traverse((child) => {
-        if (child instanceof BufferGeometry) {
-            const mesh = createInstancedMesh(child, rockMaterial, ObjectScattering);
-            mesh.name = "instancedMesh";
-            scene.add(mesh);
-        }
-    });
-});
-
-
-// let sphereMesh = createInstancedMesh(new THREE.SphereGeometry((Math.random() + 1) * 0.5, 32, 32), rockMaterial, ObjectScattering);
-// sphereMesh.name = "instancedMesh";
-// scene.add(sphereMesh);
-
 
 function updateMesh() {
     for(const volume of volumes) {
@@ -440,6 +445,55 @@ function updateMesh() {
     const volumeGeos = volumes.map(volume => volume.geometry);
     const mergedGeo = Volume.mergeGeometries(volumeGeos);
     mesh.geometry = mergedGeo;
+
+    ObjectScattering.points = distributeObjects(ObjectScattering.density);
+    ObjectScattering = {
+        ...ObjectScattering,
+        ...snapToTerrain(mesh, ObjectScattering.points)
+    }
+
+    loader.load(path.join(__dirname, './assets/models/Rock002.obj'),
+    (object: Object3D) => {
+        const objMesh = object.children[0] as THREE.Mesh;
+
+        const rockMaterial = new ShaderMaterial({
+            uniforms: {
+                mat: {
+                    value: {
+                        ...MaterialUniform(Rock002)
+                    }
+                },
+                volumeScale: {
+                    value: volumeSize * volumesAmount
+                },
+            },
+            ...createShader("objectScatter")
+        })
+
+        const mesh = createInstancedMesh(objMesh.geometry, rockMaterial, ObjectScattering, {
+            position: null,
+            rotation: null,
+            scale: new Vector3(5,5,5)
+        });
+            
+        for(let i = 0; i < scene.children.length; i++) {
+            const child = scene.children[i];
+            if(child.name === "rock002") {
+                scene.remove(child);
+            }
+        }
+        mesh.name = "rock002";
+        scene.add(mesh);
+
+        //scene.add(object);
+
+    },
+    () => { return },
+    (error: Error) => {
+        console.log('An error happened');
+        console.error(error);
+    }
+);
 }
 
 
@@ -475,6 +529,10 @@ const params = {
     'yBias': volume.yBias,
     'showEdges': volume.showEdges,
     'edgeSharpness': volume.edgeSharpness,
+
+    objects: {
+        'density': ObjectScattering.density,
+    },
 
     actions: {
         addConfig: () => {
@@ -534,6 +592,11 @@ const params = {
                     case 'edgeSharpness':
                         volume.edgeSharpness = params.edgeSharpness;
                         break;
+
+                    case 'density':
+                        ObjectScattering.density = params.objects.density;
+                        ObjectScattering.points = distributeObjects(ObjectScattering.density);
+                        break;
                                 
                     default:
                         break;
@@ -585,7 +648,11 @@ volumeFolder.add(params, 'showEdges').onChange(() => params.actions.update("show
 volumeFolder.add(params, 'edgeSharpness', 0, 100).onChange(() => params.actions.update("edgeSharpness")).name('Edge Sharpness');
 volumeFolder.add(params.actions, 'regenerate').name('Regenerate');
 
+const objectFolder = gui.addFolder('Object Settings');
+objectFolder.add(params.objects, 'density', 0, 100).onChange(() => params.actions.update("density")).name('Density');
+
 params.actions.createConfigFolders()
+updateMesh();
 
 //#endregion
 
@@ -593,21 +660,26 @@ params.actions.createConfigFolders()
 function animate() {
     requestAnimationFrame(animate)
     render()
-    orbit_controls.update();
     stats.update();
 }
 
 function render() {
+    orbit_controls.update(clock.getDelta());
+    //fly_controls.update(clock.getDelta());
     renderer.render(scene, camera)
-}
 
-animate()
+}
 
 // Event Listeners
 window.addEventListener('resize', onWindowResize, false)
+
 function onWindowResize() {
-    camera.aspect = window.innerWidth / window.innerHeight
-    camera.updateProjectionMatrix()
+    camera.aspect = window.innerWidth / window.innerHeight;
+	camera.updateProjectionMatrix();
+
     renderer.setSize(window.innerWidth, window.innerHeight)
-    render()
+    //fly_controls.handleResize();
 }
+
+//fly_controls.lookAt(new Vector3(volumeSize * 0.5, volumeSize * 0.5, volumeSize * 0.5));
+animate();
