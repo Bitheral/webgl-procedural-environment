@@ -8,10 +8,11 @@
 // needed in the renderer process.
 
 // Get threejs
-import { Vector3, DirectionalLight, PerspectiveCamera, ShaderMaterial, Texture, AxesHelper, Intersection, Vector, Vector2, MeshBasicMaterial, BufferGeometry, LoadingManager, Object3D } from 'three';
+import { Vector3, DirectionalLight, PerspectiveCamera, ShaderMaterial, Texture, AxesHelper, Intersection, Vector, Vector2, MeshBasicMaterial, BufferGeometry, LoadingManager, Object3D, Material } from 'three';
 
 // Import objloader from local file
 import OBJLoader from './OBJLoader.js';
+import MTLLoader from './MTLLoader.js';
 
 import THREE = require('three');
 
@@ -33,6 +34,9 @@ const stats = new Stats()
 stats.showPanel( 0 ); // 0: fps, 1: ms, 2: mb, 3+: custom
 document.body.appendChild( stats.dom );
 
+const volumeSize = 32;
+const volumesAmount = 1;
+
 interface PBRMaterial {
     albedo: Texture;
     normal: Texture;
@@ -47,7 +51,85 @@ interface Shader {
     glslVersion: THREE.GLSLVersion
 }
 
+const models = [] as THREE.Mesh[];
 
+const MaterialUniform = (material: PBRMaterial) => {
+    return {
+        albedo: material.albedo,
+        normal: material.normal,
+        roughness: material.roughness,
+        displacement: material.displacement,
+        ao: material.ao
+    }
+}
+
+const Rock002 = createPBRMaterial(path.join(__dirname, './assets/textures/Rock002'), 'jpg');
+
+const materials = {
+    "Rock002": new ShaderMaterial({
+        uniforms: {
+            mat: {
+                value: {
+                    ...MaterialUniform(Rock002)
+                }
+            },
+            volumeScale: {
+                value: volumeSize * volumesAmount
+            },
+        },
+        ...createShader("objectScatter")
+    })
+} as { [key: string]: THREE.Material };
+
+function addModel(model: Object3D, name: string, ignoreMaterial = false) {
+    const modelMesh = model.children[0] as THREE.Mesh;
+
+    if(!ignoreMaterial) modelMesh.material = materials[name];
+    
+    modelMesh.name = name;
+    models.push(modelMesh);
+}
+
+const loader = new OBJLoader();
+const mtlLoader = new MTLLoader();
+
+function loadModel(file: string, loadMaterialFromFile = false) {
+    if(loadMaterialFromFile) {
+        mtlLoader.setPath(path.join(__dirname, "./assets/models/"))
+        mtlLoader.load(`${file}.mtl`,
+            (materials: { preload: () => void; }) => {
+                materials.preload();
+                loader.setMaterials(materials);
+                loader.setPath(path.join(__dirname, "./assets/models/"))
+                loader.load(`${file}.obj`,
+                    (object: Object3D) => addModel(object, file, true),
+                    () => { return },
+                    (error: Error) => {
+                        console.log('An error happened');
+                        console.error(error);
+                    }
+                );
+            },
+            () => { return },
+            (error: Error) => {
+                console.log('An error happened');
+                console.error(error);
+            }
+        );
+    } else {
+        loader.load(path.join(__dirname, `./assets/models/${file}.obj`),
+            (object: Object3D) => addModel(object, file, false),
+            () => { return },
+            (error: Error) => {
+                console.log('An error happened');
+                console.error(error);
+            }
+        );
+    }
+}
+
+loadModel("Rock002");
+loadModel("Tree1", true);
 
 const gui = new GUI();
 
@@ -56,9 +138,6 @@ const scene = new THREE.Scene();
 const clock = new THREE.Clock();
 const camera = new PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000 );
 const renderer = new THREE.WebGLRenderer();
-
-const volumeSize = 32;
-const volumesAmount = 1;
 
 const volumes = [] as VolumeNew[];
 for(let z = 0; z < volumesAmount; z++) {
@@ -132,10 +211,22 @@ for(let i = 0; i < volumes.length; i++) {
 
 const volume = volumes[0];
 
-let ObjectScattering = {
+interface ObjectScattering {
+    density: number,
+    points: Vector3[],
+    intersects: Intersection[]
+}
+
+let treeScatter: ObjectScattering = {
+    density: 25,
+    points: [],
+    intersects: []
+}
+
+let rockScatter: ObjectScattering = {
     density: 100,
-    points: [] as Vector3[],
-    intersects: [] as Intersection[]
+    points: [],
+    intersects: []
 }
 
 const orbit_controls = new OrbitControls(camera, renderer.domElement)
@@ -156,7 +247,7 @@ function createShader(shaderName: string): Shader {
     }
 }
 
-function createPBRMaterial(texturePath: string, fileExtension: string = "png"): PBRMaterial {
+function createPBRMaterial(texturePath: string, fileExtension = "png"): PBRMaterial {
 
     const pbrMaterial: PBRMaterial = {
         albedo: null,
@@ -290,7 +381,7 @@ interface MatrixSettings {
     rotation: Vector3 | null;
     scale: Vector3 | null;
 }
-function createInstancedMesh(geometry: THREE.BufferGeometry, material: THREE.Material, scattering: ObjectScatters, matrixSettings: MatrixSettings): THREE.InstancedMesh {
+function createInstancedMesh(geometry: THREE.BufferGeometry, material: THREE.Material, scattering: ObjectScatters, matrixSettings: MatrixSettings, randomRot = true): THREE.InstancedMesh {
 
     // Valid points are the points that have their intersects.face.normal.normalized().y > 0;
     const validPoints = [];
@@ -314,7 +405,9 @@ function createInstancedMesh(geometry: THREE.BufferGeometry, material: THREE.Mat
         const translation = new THREE.Matrix4().makeTranslation(position.x, position.y, position.z);
 
         // Random rotation in any direction
-        const rotation = new THREE.Matrix4().makeRotationFromEuler(new THREE.Euler(Math.random() * Math.PI * 2, Math.random() * Math.PI * 2, Math.random() * Math.PI * 2));
+        const rotation = new THREE.Matrix4();
+        if(randomRot)
+             rotation.makeRotationFromEuler(new THREE.Euler(Math.random() * Math.PI * 2, Math.random() * Math.PI * 2, Math.random() * Math.PI * 2));
 
         const scale = new THREE.Matrix4().makeScale(1, 1, 1);
 
@@ -374,18 +467,6 @@ const topTexture = createPBRMaterial(path.join(__dirname, './assets/textures/Gra
 const sideTexture = createPBRMaterial(path.join(__dirname, './assets/textures/Rock'));
 const bottomTexture = createPBRMaterial(path.join(__dirname, './assets/textures/Gravel'));
 
-const Rock002 = createPBRMaterial(path.join(__dirname, './assets/textures/Rock002'), 'jpg');
-
-const MaterialUniform = (material: PBRMaterial) => {
-    return {
-        albedo: material.albedo,
-        normal: material.normal,
-        roughness: material.roughness,
-        displacement: material.displacement,
-        ao: material.ao
-    }
-}
-
 const volumeMaterial = new ShaderMaterial({
     uniforms: {
         top: {
@@ -417,7 +498,10 @@ const volumeMaterial = new ShaderMaterial({
 
 })
 
-const oldRock = new MeshBasicMaterial({ color: 0xff0000 });
+const defaultMaterial = new MeshBasicMaterial({
+    color: 0x00ff00
+});
+
 // For each volume in volumes, merge the geometries
 const volumeGeos = [] as BufferGeometry[];
 for(const volume of volumes) {
@@ -429,9 +513,6 @@ const mergedGeo = Volume.mergeGeometries(volumeGeos);
 const mesh = new THREE.Mesh(mergedGeo || volume.geometry, volumeMaterial);
 mesh.position.set(0,0,0);
 scene.add(mesh);
-   
-// Load model from OBJ file
-const loader = new OBJLoader()
 
 function updateMesh() {
     for(const volume of volumes) {
@@ -446,54 +527,44 @@ function updateMesh() {
     const mergedGeo = Volume.mergeGeometries(volumeGeos);
     mesh.geometry = mergedGeo;
 
-    ObjectScattering.points = distributeObjects(ObjectScattering.density);
-    ObjectScattering = {
-        ...ObjectScattering,
-        ...snapToTerrain(mesh, ObjectScattering.points)
+    rockScatter.points = distributeObjects(rockScatter.density);
+    rockScatter = {
+        ...rockScatter,
+        ...snapToTerrain(mesh, rockScatter.points)
     }
 
-    loader.load(path.join(__dirname, './assets/models/Rock002.obj'),
-    (object: Object3D) => {
-        const objMesh = object.children[0] as THREE.Mesh;
+    treeScatter.points = distributeObjects(treeScatter.density);
+    treeScatter = {
+        ...treeScatter,
+        ...snapToTerrain(mesh, treeScatter.points)
+    }
 
-        const rockMaterial = new ShaderMaterial({
-            uniforms: {
-                mat: {
-                    value: {
-                        ...MaterialUniform(Rock002)
-                    }
-                },
-                volumeScale: {
-                    value: volumeSize * volumesAmount
-                },
-            },
-            ...createShader("objectScatter")
-        })
+    const radians = (degrees: number) => degrees * Math.PI / 180;
+    const degrees = (radians: number) => radians * 180 / Math.PI;
 
-        const mesh = createInstancedMesh(objMesh.geometry, rockMaterial, ObjectScattering, {
+    for(const model of models) {
+        const mat = model.material as Material;
+        model.geometry.name = model.name;
+
+        const scatterProperties = model.name.includes('Rock') ? rockScatter : treeScatter;
+
+        const instancedModel = createInstancedMesh(model.geometry, mat, scatterProperties, {
             position: null,
-            rotation: null,
-            scale: new Vector3(5,5,5)
-        });
-            
-        for(let i = 0; i < scene.children.length; i++) {
-            const child = scene.children[i];
-            if(child.name === "rock002") {
+            rotation: model.name.includes('Rock') ? null : new Vector3(0, degrees(Math.random() * Math.PI * 2), 0),
+            scale: model.name.includes('Rock') ? new Vector3(5, 5, 5) : new Vector3(1, 1, 1)
+        }, model.name.includes('Rock'));
+
+        for(const child of scene.children) {
+            if(child.name === model.name) {
                 scene.remove(child);
             }
         }
-        mesh.name = "rock002";
-        scene.add(mesh);
 
-        //scene.add(object);
-
-    },
-    () => { return },
-    (error: Error) => {
-        console.log('An error happened');
-        console.error(error);
+        instancedModel.name = model.name;
+        scene.add(instancedModel);
     }
-);
+
+    console.log(scene);
 }
 
 
@@ -531,7 +602,7 @@ const params = {
     'edgeSharpness': volume.edgeSharpness,
 
     objects: {
-        'density': ObjectScattering.density,
+        'density': rockScatter.density,
     },
 
     actions: {
@@ -594,8 +665,8 @@ const params = {
                         break;
 
                     case 'density':
-                        ObjectScattering.density = params.objects.density;
-                        ObjectScattering.points = distributeObjects(ObjectScattering.density);
+                        rockScatter.density = params.objects.density;
+                        rockScatter.points = distributeObjects(rockScatter.density);
                         break;
                                 
                     default:
