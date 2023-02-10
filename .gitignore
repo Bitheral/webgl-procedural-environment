@@ -89,7 +89,8 @@ out
 
 # Nuxt.js build / generate output
 .nuxt
-dist/
+
+dist/*.js*
 
 # Gatsby files
 .cache/
@@ -130,3 +131,4 @@ dist/
 .pnp.*
 
 procedural-environment-generation-win32-x64/
+

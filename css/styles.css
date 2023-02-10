@@ -20,3 +20,7 @@ body, html {
     overflow: hidden;
     background-color: var(--background-colour);
 }
+
+div {
+    user-select: none;
+}
