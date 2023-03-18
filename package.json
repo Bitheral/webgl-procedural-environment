@@ -38,7 +38,7 @@
     "typescript": "^4.8.3"
   },
   "dependencies": {
-    "@bitheral/marching-cubes": "^1.3.2",
+    "@bitheral/marching-cubes": "^1.4.1",
     "@types/dat.gui": "^0.7.7",
     "@types/stats.js": "^0.17.0",
     "@types/three": "^0.144.0",

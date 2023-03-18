@@ -540,26 +540,26 @@ const textureLayers: TextureLayer[] = [
     {
         name: "sand",
         material: sandMaterial,
-        level: 1,
-        affectedByNormal: false,
+        level: 0.2,
+        affectedByNormal: true,
     },
     {
         name: "grass",
         material: grassMaterial,
-        level: 1,
+        level: 0.4,
         affectedByNormal: true,
     },
     {
         name: "rock",
         material: rockTexture,
-        level: 1,
-        affectedByNormal: false,
+        level: 0.7,
+        affectedByNormal: true,
     },
     {
         name: "snow",
         material: snowMaterial,
         level: 1,
-        affectedByNormal: false,
+        affectedByNormal: true,
     }
 ];
 
@@ -605,8 +605,57 @@ mesh.receiveShadow = true;
 mesh.castShadow = true;
 scene.add(mesh);
 
+
 rockScatter = updateScatter(rockScatter, mesh);
-treeScatter = updateScatter(treeScatter, mesh);
+treeScatter = createTreeNoise(updateScatter(treeScatter, mesh));
+
+const treeNoise = new THREE.Group();
+treeNoise.name = "treeNoise";
+const data = {
+    offset: new Vector3(0,0,0),
+    scale: 0.01,
+    octaves: 4,
+    persistence: 0.75,
+    lacunarity: 2,
+}
+
+// Axis helper
+const axesHelper = new AxesHelper( 5 );
+scene.add( axesHelper );
+
+const noise = new Noise(volume.seed);
+noise.setType("simplex");
+
+const heightMap = [] as Vector3[];
+
+// For every x and z position in the volume, get the height of the terrain
+const heightMapper = new THREE.Raycaster();
+for(let x = Number(volume.showEdges); x < volumeSize-Number(volume.showEdges); x++) {
+    for(let z = Number(volume.showEdges); z < volumeSize-Number(volume.showEdges); z++) {
+        const point = new Vector3(x,volumeSize * 2,z);
+        heightMapper.set(point, new Vector3(0,-1,0));
+        const intersects = heightMapper.intersectObject(mesh);
+        if(intersects.length === 0) heightMap.push(new Vector3(x,0,z));
+        else heightMap.push(intersects[0].point.clone());
+    }
+}
+
+for(const point of heightMap) {
+    const noiseValue = noise.generate3DFBM(point, data, new Vector3(0,0,0));
+
+    const color = new THREE.Color(noiseValue, noiseValue, noiseValue);
+
+    const sphere = new THREE.Mesh(
+        new THREE.BoxGeometry(1,1,1),
+        new THREE.MeshBasicMaterial({color})
+    );
+    sphere.position.set(point.x, point.y, point.z);
+    treeNoise.add(sphere);
+}
+treeNoise.position.set(0,0,0);
+scene.add(treeNoise);
+
+
 
 function updateScatter(scattering: ObjectScattering, mesh: THREE.Mesh): ObjectScattering {
     scattering.points = distributeObjects(scattering.density);
@@ -614,6 +663,56 @@ function updateScatter(scattering: ObjectScattering, mesh: THREE.Mesh): ObjectSc
         ...scattering,
         ...snapToTerrain(mesh, scattering.points)
     }
+}
+
+function createTreeNoise(scatter: ObjectScattering): ObjectScattering {
+    // In scene, look for "treeNoise" group
+    // If it exists, remove it
+    // Create a new group
+    
+    // for(const child of scene.children) {
+    //     if(child.name === "treeNoise") {
+    //         scene.remove(child);
+    //     }
+    // }
+
+    // const treeNoise = new THREE.Group();
+    // treeNoise.name = "treeNoise";
+
+    // const noise = new Noise(Math.random() * 65536);
+    // const newScatter = scatter;
+    // const newPoints = [] as Vector3[];
+    // const data = {
+    //     offset: new Vector3(0,0,0),
+    //     scale: 1,
+    //     octaves: 1,
+    //     persistence: 1,
+    //     lacunarity: 1,
+    // }
+    // for(let i = 0; i < scatter.points.length; i++) {
+    //     const point = scatter.points[i];
+    //     const noiseValue = noise.generate3D(point, data);
+    //     if(noiseValue > 0.5) newPoints.push(point);
+    // }
+    // newScatter.points = newPoints;
+
+    // for(let x = 0; x < volumeSize; x++) {
+    //     for(let y = 0; y < volumeSize; y++) {
+    //         for(let z = 0; z < volumeSize; z++) {
+    //             const point = new Vector3(x,y,z);
+    //             const noiseValue = noise.generate3D(point, data);
+    //             const sphere = new THREE.Mesh(
+    //                 new THREE.SphereGeometry(0.1, 8, 8),
+    //                 new THREE.MeshBasicMaterial({color: 0xffffff * noiseValue})
+    //             );
+    //             sphere.position.set(x,y,z);
+    //             treeNoise.add(sphere);
+    //         }
+    //     }
+    // }
+
+
+    return scatter;
 }
 
 function updateMesh(loadedModels: THREE.Mesh[]) {
@@ -630,7 +729,7 @@ function updateMesh(loadedModels: THREE.Mesh[]) {
     mesh.geometry = mergedGeo;
 
     rockScatter = updateScatter(rockScatter, mesh);
-    treeScatter = updateScatter(treeScatter, mesh);
+    treeScatter = createTreeNoise(updateScatter(treeScatter, mesh));
 
     const radians = (degrees: number) => degrees * Math.PI / 180;
     const degrees = (radians: number) => radians * 180 / Math.PI;
@@ -805,15 +904,6 @@ const params = {
         }
     }
 }
-
-// Render the render target to the screen
-const planeGeo = new THREE.PlaneGeometry(2, 2);
-const planeMaterial = new MeshBasicMaterial({
-    map: depthRenderer.texture,
-    side: THREE.DoubleSide
-});
-const planeMesh = new THREE.Mesh(planeGeo, planeMaterial);
-scene.add(planeMesh);
 
 // noiseFolder.add(params, 'noiseScale', 0.01, 10).onChange(() => params.actions.update("noiseScale")).name('Noise Scale');
 

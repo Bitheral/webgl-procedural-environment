@@ -93,6 +93,7 @@ void main() {
     // Get the material layer that the current y position is in
     // Provide a default material layer
     int layer = -1;
+    int lastLayer = -1;
     // Loop through all the material layers
     for (int i = 0; i < 4; i++) {
         // If the current y position is in the current material layer
@@ -101,12 +102,12 @@ void main() {
             layer = i;
             break;
         }
+        lastLayer = i -1;
     }
 
-    // If layer is still -1, then the current y position is not in any material layer
-    // Set the current material layer to the last material layer
+    // If the layer is still -1, then use the last layer
     if (layer == -1) {
-        discard;
+        layer = lastLayer;
     }
 
     int DEBUG = 0;
