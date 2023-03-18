@@ -51,14 +51,22 @@ interface Shader {
 
 const models = [] as THREE.Mesh[];
 
+interface ShaderPBR {
+    albedo: THREE.Texture;
+    normal: THREE.Texture;
+    roughness: THREE.Texture;
+    displacement: THREE.Texture;
+    ao: THREE.Texture;
+}
 const MaterialUniform = (material: PBRMaterial) => {
-    return {
+    const result: ShaderPBR = {
         albedo: material.albedo,
         normal: material.normal,
         roughness: material.roughness,
         displacement: material.displacement,
         ao: material.ao
     }
+    return result;
 }
 
 const Rock002 = createPBRMaterial(path.join(__dirname, './assets/textures/Rock002'), 'jpg');
@@ -297,10 +305,6 @@ let rockScatter: ObjectScattering = {
 }
 
 const orbit_controls = new OrbitControls(camera, renderer.domElement)
-//const fly_controls = new FirstPersonControls(camera, renderer.domElement);
-// fly_controls.movementSpeed = 150;
-// fly_controls.lookSpeed = 0.1;
-//fly_controls.activeLook = false;
 
 camera.position.set(volumeSize * 0.5, volumeSize * 1.5, -volumeSize * 1.5);
 camera.lookAt(volumeSize * 0.5, volumeSize * 0.5, volumeSize * 0.5);
@@ -441,6 +445,7 @@ interface MatrixSettings {
     rotation: Vector3 | null;
     scale: Vector3 | null;
 }
+
 function createInstancedMesh(geometry: THREE.BufferGeometry, material: THREE.Material, scattering: ObjectScatters, matrixSettings: MatrixSettings, randomRot = true): THREE.InstancedMesh {
 
     // Valid points are the points that have their intersects.face.normal.normalized().y > 0;
@@ -514,52 +519,59 @@ renderer.setSize( window.innerWidth, window.innerHeight );
 renderer.setClearColor( 0x000000, 0);
 document.getElementById('webgl').appendChild(renderer.domElement);
 
-const depthRenderer = new THREE.WebGLRenderTarget(window.innerWidth, window.innerHeight);
-depthRenderer.texture.minFilter = THREE.NearestFilter;
-depthRenderer.texture.magFilter = THREE.NearestFilter;
-depthRenderer.depthTexture = new THREE.DepthTexture(window.innerWidth, window.innerHeight);
-depthRenderer.depthTexture.format = THREE.DepthFormat;
-depthRenderer.depthTexture.type = THREE.UnsignedShortType;
-
 orbit_controls.target = new Vector3(0,0,0).addScalar(volumeSize).divideScalar(2);
 
 // Create an axes helper
 // const axesHelper = new AxesHelper( 5 );
 // scene.add( axesHelper );
 
-const topTexture = createPBRMaterial(path.join(__dirname, './assets/textures/Grass'));
-const sideTexture = createPBRMaterial(path.join(__dirname, './assets/textures/Rock'));
+const sandMaterial = createPBRMaterial(path.join(__dirname, './assets/textures/Sand'));
+const grassMaterial = createPBRMaterial(path.join(__dirname, './assets/textures/Grass'));
+const rockTexture = createPBRMaterial(path.join(__dirname, './assets/textures/Rock'));
+const snowMaterial = createPBRMaterial(path.join(__dirname, './assets/textures/Snow'));
 
-const waterNormal = new THREE.TextureLoader().load(path.join(__dirname, "assets", "textures", "Water", "normal.jpg"));
-waterNormal.wrapS = THREE.RepeatWrapping;
-waterNormal.wrapT = THREE.RepeatWrapping;
-
-const waterMaterial = new ShaderMaterial({
-    uniforms: {
-        resolution: {
-            value: new Vector2(window.innerWidth, window.innerHeight)
-        },
-        viewPosition: {
-            value: camera.position
-        }
+interface TextureLayer {
+    name: string;
+    material: ShaderPBR;
+    level: number;
+    affectedByNormal: boolean;
+}
+const textureLayers: TextureLayer[] = [
+    {
+        name: "sand",
+        material: sandMaterial,
+        level: 1,
+        affectedByNormal: false,
     },
-    ...createShader("water")
-})
+    {
+        name: "grass",
+        material: grassMaterial,
+        level: 1,
+        affectedByNormal: true,
+    },
+    {
+        name: "rock",
+        material: rockTexture,
+        level: 1,
+        affectedByNormal: false,
+    },
+    {
+        name: "snow",
+        material: snowMaterial,
+        level: 1,
+        affectedByNormal: false,
+    }
+];
+
 
 const volumeMaterial = new ShaderMaterial({
     uniforms: {
-        top: {
-            value: MaterialUniform(topTexture)
+        materials: {
+            value: textureLayers
         },
-        bottom: {
-            value: MaterialUniform(sideTexture)
+        yBias: {
+            value: volume.yBias
         },
-        xAx: {
-            value: MaterialUniform(sideTexture)
-        },
-        zAx: {
-            value: MaterialUniform(sideTexture)
-        },            
         noiseScale: {
             value: volume.noiseScale
         },
@@ -592,17 +604,6 @@ mesh.position.set(0,0,0);
 mesh.receiveShadow = true;
 mesh.castShadow = true;
 scene.add(mesh);
-
-// Create a plane
-const plane = new THREE.Mesh(
-    new THREE.PlaneGeometry(1000, 1000, 100, 100),
-    waterMaterial
-);
-
-plane.receiveShadow = true;
-plane.castShadow = true;
-scene.add(plane);
-
 
 rockScatter = updateScatter(rockScatter, mesh);
 treeScatter = updateScatter(treeScatter, mesh);
@@ -821,6 +822,17 @@ volumeFolder.add(params, 'densityThreshold', -1, 1).onChange(() => params.action
 volumeFolder.add(params, 'yBias', 0, volumeSize).onChange(() => params.actions.update("yBias")).name('Y Bias');
 volumeFolder.add(params, 'showEdges').onChange(() => params.actions.update("showEdges")).name('Show Edges');
 volumeFolder.add(params, 'edgeSharpness', 0, 100).onChange(() => params.actions.update("edgeSharpness")).name('Edge Sharpness');
+
+const textureLayersFolder = volumeFolder.addFolder('Texture Layers');
+for(let i = 0; i < textureLayers.length; i++) {
+    const layer = textureLayers[i];
+    const layerName = layer.name.charAt(0).toUpperCase() + layer.name.slice(1);
+    const layerFolder = textureLayersFolder.addFolder(layerName);
+    layerFolder.add(layer, 'level', 0, 1).name('Maximum');
+    layerFolder.add(layer, 'affectedByNormal')
+}
+
+
 volumeFolder.add(params.actions, 'regenerate').name('Regenerate');
 
 const objectFolder = gui.addFolder('Object Settings');
@@ -842,12 +854,9 @@ function animate() {
 function render() {
     if(frameCount == 28) updateMesh(models);
     orbit_controls.update(clock.getDelta());
-    //fly_controls.update(clock.getDelta());
-
-    renderer.setRenderTarget(depthRenderer);
-    // renderer.render(scene, camera);
-
+    
     renderer.render(scene, camera)
+
     frameCount++;
 }
 
@@ -858,8 +867,6 @@ function onWindowResize() {
     camera.aspect = window.innerWidth / window.innerHeight;
 	camera.updateProjectionMatrix();
 
-    const dpr = renderer.getPixelRatio();
-    depthRenderer.setSize(window.innerWidth * dpr, window.innerHeight * dpr);
     renderer.setSize(window.innerWidth, window.innerHeight);
 }
 animate();
