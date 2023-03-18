@@ -19,6 +19,15 @@ struct Light {
     vec3 direction;
 };
 
+struct MaterialLayer {
+    Material material;
+    float level;
+    bool affectedByNormal;
+};
+
+uniform Light worldLight;
+uniform vec3 viewPosition;
+
 
 in vec3 vertex;
 in vec2 uvs;
@@ -28,17 +37,11 @@ in vec3 worldPosition;
 in mat4 instanceMat;
 in mat4 modelMat;
 
-uniform Material xAx;
-
-uniform Material top;
-uniform Material bottom;
-
-uniform Material zAx;
+uniform MaterialLayer[4] materials;
 
 uniform float volumeScale;
 uniform float noiseScale;
-
-uniform Light worldLight;
+uniform float yBias;
 
 varying vec3 volumeDensityColor;
 
@@ -49,23 +52,29 @@ SampledMaterial sampleMaterial(Material material, vec2 uv) {
     sampledMaterial.roughness = texture2D(material.roughness, uv);
     sampledMaterial.displacement = texture2D(material.displacement, uv);
     sampledMaterial.ao = texture2D(material.ao, uv);
+
     return sampledMaterial;
 }
 
 vec4 calculateLight(SampledMaterial material) {   
     vec3 color = vec3(0);
-    vec3 light = vec3(volumeScale * 0.5, volumeScale * 1.5, volumeScale * 0.5);
 
     // Include ambient light
-    color += material.albedo.rgb * 0.99;
+    color += material.albedo.rgb * 0.5;
 
     // Include normal map
-    vec3 normal = normalize(material.normal.rgb * 2.0 - 1.0) * 0.75;
+    vec3 normal = normalize(material.normal.rgb * 2.0 - 1.0) * 0.5;
 
     // Include normal light
-    vec3 lightDir = normalize(light - vertex);
+    vec3 lightDir = normalize(worldLight.direction);
     float diff = max(dot(normal, lightDir), 0.0);
     color += material.albedo.rgb * diff;
+
+    // Include specular light
+    // vec3 viewDir = normalize(viewPosition - vertex);
+    // vec3 reflectDir = reflect(-lightDir, normal);
+    // float spec = pow(max(dot(viewDir, reflectDir), 0.0), 32.0);
+    // color += vec3(1.0) * spec;
 
     // Include ambient occlusion
     color *= material.ao.rgb;
@@ -76,6 +85,29 @@ vec4 calculateLight(SampledMaterial material) {
 out vec4 final;
 
 void main() {
+
+    // Based on the y position, we can determine which material layer we are in
+    float y = worldPosition.y / volumeScale;
+
+
+    // Get the material layer that the current y position is in
+    // Provide a default material layer
+    int layer = -1;
+    // Loop through all the material layers
+    for (int i = 0; i < 4; i++) {
+        // If the current y position is in the current material layer
+        if (y < materials[i].level) {
+            // Set the current material layer to the current material layer
+            layer = i;
+            break;
+        }
+    }
+
+    // If layer is still -1, then the current y position is not in any material layer
+    // Set the current material layer to the last material layer
+    if (layer == -1) {
+        discard;
+    }
 
     int DEBUG = 0;
 
@@ -95,21 +127,25 @@ void main() {
     // Based on the normals, we can determine which side of the cube we are on
     // and sample the correct material
     if (normals.x <= 0.5) {
-        sideM = sampleMaterial(xAx, uv_left);
+        if(!materials[layer].affectedByNormal) sideM = sampleMaterial(materials[layer].material, uv_left);
+        else sideM = sampleMaterial(materials[2].material, uv_left);
     } else {
-        sideM = sampleMaterial(xAx, uv_right);
+        if(!materials[layer].affectedByNormal) sideM = sampleMaterial(materials[layer].material, uv_right);
+        else sideM = sampleMaterial(materials[2].material, uv_right);
     }
 
     if (normals.z <= 0.5) {
-        frontM = sampleMaterial(zAx, uv_back);
+        if(!materials[layer].affectedByNormal) frontM = sampleMaterial(materials[layer].material, uv_back);
+        else frontM = sampleMaterial(materials[2].material, uv_back);
     } else {
-        frontM = sampleMaterial(zAx, uv_front);
+        if(!materials[layer].affectedByNormal) frontM = sampleMaterial(materials[layer].material, uv_front);
+        else frontM = sampleMaterial(materials[2].material, uv_front);
     }
 
     if (normals.y <= 0.5) {
-        topM = sampleMaterial(bottom, uv_bottom);
+        topM = sampleMaterial(materials[2].material, uv_bottom);
     } else {
-        topM = sampleMaterial(top, uv_top);
+        topM = sampleMaterial(materials[layer].material, uv_top);
     }
 
     vec3 weights = abs(normals) / noiseScale;
