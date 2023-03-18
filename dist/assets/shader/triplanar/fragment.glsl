@@ -18,6 +18,8 @@ struct Light {
     vec3 position;
     vec3 direction;
 };
+uniform Light worldLight;
+uniform vec3 viewPosition;
 
 
 in vec3 vertex;
@@ -38,8 +40,6 @@ uniform Material zAx;
 uniform float volumeScale;
 uniform float noiseScale;
 
-uniform Light worldLight;
-
 varying vec3 volumeDensityColor;
 
 SampledMaterial sampleMaterial(Material material, vec2 uv) {
@@ -49,23 +49,29 @@ SampledMaterial sampleMaterial(Material material, vec2 uv) {
     sampledMaterial.roughness = texture2D(material.roughness, uv);
     sampledMaterial.displacement = texture2D(material.displacement, uv);
     sampledMaterial.ao = texture2D(material.ao, uv);
+
     return sampledMaterial;
 }
 
 vec4 calculateLight(SampledMaterial material) {   
     vec3 color = vec3(0);
-    vec3 light = vec3(volumeScale * 0.5, volumeScale * 1.5, volumeScale * 0.5);
 
     // Include ambient light
-    color += material.albedo.rgb * 0.99;
+    color += material.albedo.rgb * 0.5;
 
     // Include normal map
-    vec3 normal = normalize(material.normal.rgb * 2.0 - 1.0) * 0.75;
+    vec3 normal = normalize(material.normal.rgb * 2.0 - 1.0) * 0.5;
 
     // Include normal light
-    vec3 lightDir = normalize(light - vertex);
+    vec3 lightDir = normalize(worldLight.direction);
     float diff = max(dot(normal, lightDir), 0.0);
     color += material.albedo.rgb * diff;
+
+    // Include specular light
+    // vec3 viewDir = normalize(viewPosition - vertex);
+    // vec3 reflectDir = reflect(-lightDir, normal);
+    // float spec = pow(max(dot(viewDir, reflectDir), 0.0), 32.0);
+    // color += vec3(1.0) * spec;
 
     // Include ambient occlusion
     color *= material.ao.rgb;
