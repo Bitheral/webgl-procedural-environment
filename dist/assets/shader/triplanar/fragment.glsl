@@ -1,26 +1,10 @@
-struct Material {
-    sampler2D albedo;
-    sampler2D normal;
-    sampler2D roughness;
-    sampler2D displacement;
-    sampler2D ao;
-};
-
-struct SampledMaterial {
-    vec4 albedo;
-    vec4 normal;
-    vec4 roughness;
-    vec4 displacement;
-    vec4 ao;
-};
-
 struct Light {
     vec3 position;
     vec3 direction;
 };
 
 struct MaterialLayer {
-    Material material;
+    float index;
     float level;
     bool affectedByNormal;
 };
@@ -39,47 +23,47 @@ in mat4 modelMat;
 
 uniform MaterialLayer[4] materials;
 
+uniform sampler2D albedo;
+uniform sampler2D ao;
+uniform sampler2D normal;
+
 uniform float volumeScale;
 uniform float noiseScale;
 uniform float yBias;
 
 varying vec3 volumeDensityColor;
 
-SampledMaterial sampleMaterial(Material material, vec2 uv) {
-    SampledMaterial sampledMaterial;
-    sampledMaterial.albedo = texture2D(material.albedo, uv);
-    sampledMaterial.normal = texture2D(material.normal, uv);
-    sampledMaterial.roughness = texture2D(material.roughness, uv);
-    sampledMaterial.displacement = texture2D(material.displacement, uv);
-    sampledMaterial.ao = texture2D(material.ao, uv);
+// SampledMaterial sampleMaterial(Material material, vec2 uv, vec2 scale, vec2 offset) {
 
-    return sampledMaterial;
-}
+//     // Corrected UVs
+//     uv = uv * scale + offset;
 
-vec4 calculateLight(SampledMaterial material) {   
-    vec3 color = vec3(0);
+//     SampledMaterial sampledMaterial;
+//     sampledMaterial.albedo = texture2D(material.albedo, uv);
+//     sampledMaterial.normal = texture2D(material.normal, uv);
+//     sampledMaterial.ao = texture2D(material.ao, uv);
+
+//     return sampledMaterial;
+// }
+
+vec4 calculateLight(vec4 a, vec4 ao, vec4 normal) {   
+    vec4 color = vec4(0);
 
     // Include ambient light
-    color += material.albedo.rgb * 0.5;
+    color += a * 0.5;
 
     // Include normal map
-    vec3 normal = normalize(material.normal.rgb * 2.0 - 1.0) * 0.5;
+    vec3 normal_m = normalize(normal.xyz * 2.0 - 1.0) * 0.5;
 
     // Include normal light
     vec3 lightDir = normalize(worldLight.direction);
-    float diff = max(dot(normal, lightDir), 0.0);
-    color += material.albedo.rgb * diff;
-
-    // Include specular light
-    // vec3 viewDir = normalize(viewPosition - vertex);
-    // vec3 reflectDir = reflect(-lightDir, normal);
-    // float spec = pow(max(dot(viewDir, reflectDir), 0.0), 32.0);
-    // color += vec3(1.0) * spec;
+    float diff = max(dot(normal_m, lightDir), 0.0);
+    color += a * diff;
 
     // Include ambient occlusion
-    color *= material.ao.rgb;
+    color *= ao;
 
-    return vec4(color, 1.0);
+    return color;
 }
 
 out vec4 final;
@@ -112,11 +96,11 @@ void main() {
 
     int DEBUG = 0;
 
-    SampledMaterial frontM;
-    SampledMaterial topM;
-    SampledMaterial sideM;
+    vec4 frontM;
+    vec4 topM;
+    vec4 sideM;
 
-    vec2 uv_front = vec2(-worldPosition.z, -worldPosition.y) / volumeScale;
+    vec2 uv_front = -(worldPosition.zy) / volumeScale;
     vec2 uv_back = (worldPosition.yz / volumeScale);
 
     vec2 uv_left = -worldPosition.xy / volumeScale;
@@ -125,36 +109,34 @@ void main() {
     vec2 uv_top = worldPosition.xz / volumeScale;
     vec2 uv_bottom = (worldPosition.zx / volumeScale);
 
-    // Based on the normals, we can determine which side of the cube we are on
-    // and sample the correct material
-    if (normals.x <= 0.5) {
-        if(!materials[layer].affectedByNormal) sideM = sampleMaterial(materials[layer].material, uv_left);
-        else sideM = sampleMaterial(materials[2].material, uv_left);
-    } else {
-        if(!materials[layer].affectedByNormal) sideM = sampleMaterial(materials[layer].material, uv_right);
-        else sideM = sampleMaterial(materials[2].material, uv_right);
-    }
+    float xOffset = float(layer % 2) * 0.5;
+    float yOffset = float(layer / 2) * 0.5; 
+    // vec2 offset = vec2(xOffset, yOffset);
+    vec2 offset = vec2(xOffset, yOffset);
+    vec2 scale = vec2(0.5, 0.5);
 
-    if (normals.z <= 0.5) {
-        if(!materials[layer].affectedByNormal) frontM = sampleMaterial(materials[layer].material, uv_back);
-        else frontM = sampleMaterial(materials[2].material, uv_back);
-    } else {
-        if(!materials[layer].affectedByNormal) frontM = sampleMaterial(materials[layer].material, uv_front);
-        else frontM = sampleMaterial(materials[2].material, uv_front);
-    }
+    vec2 uv_s = normals.x <= 0.5 ? uv_left * -scale : uv_right * -scale;
+    vec2 uv_f = normals.z <= 0.5 ? uv_front * -scale : uv_back * -scale;
+    vec2 uv_t = normals.y <= 0.5 ? uv_bottom * scale : uv_top * scale;
 
-    if (normals.y <= 0.5) {
-        topM = sampleMaterial(materials[2].material, uv_bottom);
-    } else {
-        topM = sampleMaterial(materials[layer].material, uv_top);
-    }
+    vec4 a_t = texture2D(albedo, normals.y <= 0.5 ? uv_t + vec2(0, scale.y) : uv_t + offset);
+    vec4 a_s = texture2D(albedo, !materials[layer].affectedByNormal ? uv_s + offset : uv_s + vec2(0.01, scale.y + 0.01));
+    vec4 a_f = texture2D(albedo, !materials[layer].affectedByNormal ? uv_f + offset : uv_f + vec2(0.01, scale.y + 0.01));
+
+    vec4 n_t = texture2D(normal, normals.y <= 0.5 ? uv_t + vec2(0, scale.y) : uv_t + offset);
+    vec4 n_s = texture2D(normal, !materials[layer].affectedByNormal ? uv_s + offset : uv_s + vec2(0.01, scale.y + 0.01));
+    vec4 n_f = texture2D(normal, !materials[layer].affectedByNormal ? uv_f + offset : uv_f + vec2(0.01, scale.y + 0.01));
+
+    vec4 ao_t = texture2D(ao, normals.y <= 0.5 ? uv_t + vec2(0, scale.y) : uv_t + offset);
+    vec4 ao_s = texture2D(ao, !materials[layer].affectedByNormal ? uv_s + offset : uv_s + vec2(0.01, scale.y + 0.01));
+    vec4 ao_f = texture2D(ao, !materials[layer].affectedByNormal ? uv_f + offset : uv_f + vec2(0.01, scale.y + 0.01));
 
     vec3 weights = abs(normals) / noiseScale;
     weights = weights / (weights.x + weights.y + weights.z);
 
-    vec4 f = calculateLight(frontM);
-    vec4 t = calculateLight(topM);
-    vec4 s = calculateLight(sideM);
+    vec4 f = calculateLight(a_f, ao_f, n_f);
+    vec4 t = calculateLight(a_t, ao_t, n_t);
+    vec4 s = calculateLight(a_s, ao_s, n_s);
 
     vec4 color = DEBUG == 1 ? vec4(weights, 1.0) : (f * weights.x) + (t * weights.y) + (s * weights.z);
     
