@@ -64,11 +64,12 @@ const MaterialUniform = (material: PBRMaterial) => {
 }
 
 const Rock002 = createPBRMaterial(path.join(__dirname, './assets/textures/Rock002'), 'jpg');
+const Terrain = createPBRMaterial(path.join(__dirname, './assets/textures/Terrain'));
 
 // Example Three.js code
 const scene = new THREE.Scene();
 const light = new DirectionalLight(0xffffff, 1);
-light.position.set(volumeSize, volumeSize * 2, -volumeSize);
+light.position.set(volumeSize, volumeSize * 2, volumeSize);
 light.shadow.camera.lookAt(new Vector3(volumeSize * 0.5, 1, volumeSize * 0.5));
 light.castShadow = true;
 scene.add(light);
@@ -89,7 +90,7 @@ const materials = {
             worldLight: {
                 value: {
                     position: light.position,
-                    direction: light.getWorldDirection(new Vector3()),
+                    direction: light.getWorldDirection(new Vector3(volumeSize * 0.5, 0, volumeSize * 0.5)),
                 }
             },
             viewPosition: {
@@ -280,21 +281,27 @@ if(volumes.length > 1) {
 }
 
 interface ObjectScattering {
+    enabled: boolean,
     density: number,
+    scale: number,
     points: Vector3[],
     intersects: Intersection[],
     normals: Vector3[]
 }
 
 let treeScatter: ObjectScattering = {
+    enabled: true,
     density: 25,
+    scale: 1,
     points: [],
     intersects: [],
     normals: []
 }
 
 let rockScatter: ObjectScattering = {
+    enabled: true,
     density: 100,
+    scale: 4,
     points: [],
     intersects: [],
     normals: []
@@ -402,6 +409,15 @@ function createInstancedMesh(geometry: THREE.BufferGeometry, material: THREE.Mat
             matrix.multiply(rotationMatrix);
         }
 
+        // Randomly scale the object between 0.75 and 1.25
+        const scaleRandom = Math.random() * 0.5 + 0.75;
+        const scale = new THREE.Matrix4().makeScale(
+            scaleRandom,
+            scaleRandom,
+            scaleRandom
+        );
+
+        matrix.multiply(scale);
         if(matrixSettings.scale) {
             const scaleMatrix = new THREE.Matrix4().makeScale(
                 matrixSettings.scale.x,
@@ -498,12 +514,6 @@ orbit_controls.target = new Vector3(0,0,0).addScalar(volumeSize).divideScalar(2)
 // const rockTexture = createPBRMaterial(path.join(__dirname, './assets/textures/Rock'));
 // const snowMaterial = createPBRMaterial(path.join(__dirname, './assets/textures/Snow'));
 
-// Load texture
-const terrain_albedo = new THREE.TextureLoader().load(path.join(__dirname, './assets/textures/terrain.png'));
-const terrain_normal = new THREE.TextureLoader().load(path.join(__dirname, './assets/textures/terrain_norm.png'));
-const terrain_ao = new THREE.TextureLoader().load(path.join(__dirname, './assets/textures/terrain_ao.png'));
-
-
 interface TextureLayer {
     name: string;
     index: number;
@@ -543,14 +553,11 @@ const volumeMaterial = new ShaderMaterial({
         materials: {
             value: textureLayers
         },
-        albedo: {
-            value: terrain_albedo
+        material: {
+            value: MaterialUniform(Terrain)
         },
-        normal: {
-            value: terrain_normal
-        },
-        ao: {
-            value: terrain_ao
+        debug: {
+            value: 0
         },
         yBias: {
             value: volume.yBias
@@ -600,7 +607,7 @@ function updateScatter(scattering: ObjectScattering): ObjectScattering {
 
     const data = {
         offset: new Vector3(0,0,0),
-        scale: 3,
+        scale: scattering.scale,
         octaves: 2,
         persistence: 0.75,
         lacunarity: 2,
@@ -705,21 +712,23 @@ function updateMesh(loadedModels: THREE.Mesh[]) {
         model.geometry.name = model.name;
 
         const scatterProperties = model.name.includes('Rock') ? rockScatter : treeScatter;
-            
-        const instancedModel = createInstancedMesh(model.geometry, mat, scatterProperties, {
-            position: null,
-            rotation: null,
-            scale: model.name.includes('Rock') ? new Vector3(5, 5, 5) : new Vector3(1, 1, 1)
-        }, model.name.includes('Rock'));
+        
+        // Check if the scene already has an instanced mesh with the same name
+        const existingInstancedMesh = scene.getObjectByName(model.name);
+        if(existingInstancedMesh)
+            scene.remove(existingInstancedMesh);
 
-        for(const child of scene.children) {
-            if(child.name === model.name) {
-                scene.remove(child);
-            }
+        
+        if(scatterProperties.enabled) {
+            const instancedModel = createInstancedMesh(model.geometry, mat, scatterProperties, {
+                position: null,
+                rotation: null,
+                scale: model.name.includes('Rock') ? new Vector3(5, 5, 5) : new Vector3(1, 1, 1)
+            }, model.name.includes('Rock'));
+
+            instancedModel.name = model.name;
+            scene.add(instancedModel);
         }
-
-        instancedModel.name = model.name;
-        scene.add(instancedModel);
     });
 }
 
@@ -760,10 +769,14 @@ const params = {
     objects: [{
         name: 'Rock',
         density: rockScatter.density,
+        scale: rockScatter.scale,
+        enabled: rockScatter.enabled,
     },
     {
         name: 'Tree',
         density: treeScatter.density,
+        scale: treeScatter.scale,
+        enabled: treeScatter.enabled,
     }],
 
     actions: {
@@ -833,6 +846,30 @@ const params = {
                             } else if(obj.name === 'Tree') {
                                 treeScatter.density = obj.density;
                                 obj.density = treeScatter.density;
+                            }
+                        }
+                        break;
+
+                    case 'scale':
+                        for(const obj of params.objects) {
+                            if(obj.name === 'Rock') {
+                                rockScatter.scale = obj.scale;
+                                obj.scale = rockScatter.scale;
+                            } else if(obj.name === 'Tree') {
+                                treeScatter.scale = obj.scale;
+                                obj.scale = treeScatter.scale;
+                            }
+                        }
+                        break;
+
+                    case 'enabled':
+                        for(const obj of params.objects) {
+                            if(obj.name === 'Rock') {
+                                rockScatter.enabled = obj.enabled;
+                                obj.enabled = rockScatter.enabled;
+                            } else if(obj.name === 'Tree') {
+                                treeScatter.enabled = obj.enabled;
+                                obj.enabled = treeScatter.enabled;
                             }
                         }
                         break;
@@ -906,7 +943,9 @@ volumeFolder.add(params.actions, 'regenerate').name('Regenerate');
 const objectsFolder = gui.addFolder('Object Settings');
 for(const object of params.objects) {
     const objectFolder = objectsFolder.addFolder(object.name);
+    objectFolder.add(object, 'enabled').name('Enabled').onChange(() => params.actions.update("enabled", object.name));
     objectFolder.add(object, 'density', 0, 100).onChange(() => params.actions.update("density", object.name)).name('Density');
+    objectFolder.add(object, 'scale', 0.1, 4).name('Scale').onChange(() => params.actions.update("scale", object.name));
 }
 
 
