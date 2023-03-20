@@ -1,8 +1,3 @@
-struct Light {
-    vec3 position;
-    vec3 direction;
-};
-
 struct MaterialLayer {
     float index;
     float level;
@@ -21,7 +16,7 @@ struct SampledMaterial {
     vec4 ao;
 };
 
-uniform Light worldLight;
+
 uniform vec3 viewPosition;
 
 
@@ -29,6 +24,8 @@ in vec3 vertex;
 in vec2 uvs;
 in vec3 normals;
 in vec3 worldPosition;
+in vec3 fromLightPosition;
+in vec3 toCameraVector;
 
 in mat4 instanceMat;
 in mat4 modelMat;
@@ -60,18 +57,50 @@ SampledMaterial sampleMaterial(Material material, vec2 uv) {
 vec4 calculateLight(SampledMaterial sampleMaterial) {   
     vec4 color = vec4(0);
 
-    // Include ambient light
-    color += sampleMaterial.albedo * 0.5;
+    // // Include ambient light
+    // color = mix(color, sampleMaterial.albedo, 0.5);
 
-    // Include normal map
-    vec4 normal = (normalize(sampleMaterial.normal + vec4(normals, 1.0)) * 2.0 - 1.0);
+    // // Include normal light
+    // vec3 viewVector = normalize(toCameraVector);
+    // vec3 texNormal = vec3(sampleMaterial.normal.r * 2.0 - 1.0, sampleMaterial.normal.b, sampleMaterial.normal.g * 2.0 - 1.0);
+    // texNormal = normalize(texNormal);
 
-    // Include normal light
-    vec4 lightDir = vec4(normalize(worldLight.direction), 1.0);
-    float diff = max(dot(normal, lightDir), 0.0);
-    color += sampleMaterial.albedo * diff;
+    // vec3 reflectedLight = reflect(normalize(fromLightPosition), texNormal);
+    // float specular = pow(max(dot(reflectedLight, viewVector), 0.0), 0.0);
+    // vec3 specularHighlight = vec3(1.0, 1.0, 1.0) * specular * 0.5;
 
-    // Include ambient occlusion
+    // color = mix(color, vec4(specularHighlight, 1.0), 0.5);
+
+    // // Include ambient occlusion
+    // color *= sampleMaterial.ao;
+
+
+    // Apply a directional light
+    vec3 lightDirection = normalize(vec3(0.0, 1.0, 0.0));
+    vec3 lightColor = vec3(1.0, 1.0, 1.0);
+
+    // Calculate the light intensity
+    float lightIntensity = max(dot((normals + sampleMaterial.normal.rgb) * 0.5, lightDirection), 0.0);
+
+    // Calculate the ambient light
+    vec3 ambient = sampleMaterial.albedo.rgb * lightColor * 0.1;
+
+    // Calculate the diffuse light
+    vec3 diffuse = sampleMaterial.albedo.rgb * lightColor * lightIntensity;
+
+    // Calculate the specular light
+    vec3 viewVector = normalize(toCameraVector);
+    vec3 texNormal = vec3(sampleMaterial.normal.r * 2.0 - 1.0, sampleMaterial.normal.b, sampleMaterial.normal.g * 2.0 - 1.0);
+    texNormal = normalize(texNormal);
+
+    // vec3 reflectedLight = reflect(normalize(-fromLightPosition), texNormal);
+    // float specular = pow(max(dot(reflectedLight, viewVector), 0.0), 0.0);
+    // vec3 specularHighlight = vec3(1.0, 1.0, 1.0) * specular * 0.5;
+
+    // Calculate the final color
+    color = vec4(ambient + diffuse, 1.0);
+
+    // Apply ambient occlusion
     color *= sampleMaterial.ao;
 
     return color;

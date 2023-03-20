@@ -8,7 +8,7 @@
 // needed in the renderer process.
 
 // Get threejs
-import { Vector3, DirectionalLight, PerspectiveCamera, ShaderMaterial, Texture, AxesHelper, Intersection, Vector, Vector2, MeshBasicMaterial, BufferGeometry, LoadingManager, Object3D, Material } from 'three';
+import { Vector3, DirectionalLight, PerspectiveCamera, ShaderMaterial, Texture, AxesHelper, Intersection, Vector, Vector2, MeshBasicMaterial, BufferGeometry, LoadingManager, Object3D, Material, TextureLoader } from 'three';
 
 // Import objloader from local file
 import { OBJLoader, MTLLoader } from './loaders';
@@ -69,12 +69,12 @@ const Terrain = createPBRMaterial(path.join(__dirname, './assets/textures/Terrai
 // Example Three.js code
 const scene = new THREE.Scene();
 const light = new DirectionalLight(0xffffff, 1);
-light.position.set(volumeSize, volumeSize * 2, volumeSize);
-light.shadow.camera.lookAt(new Vector3(volumeSize * 0.5, 1, volumeSize * 0.5));
-light.castShadow = true;
+light.position.set(volumeSize * 0.5, volumeSize, volumeSize * 0.5);
 scene.add(light);
 
 const camera = new PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000 );
+const clock = new THREE.Clock();
+clock.start();
 
 const materials = {
     "Rock002": new ShaderMaterial({
@@ -98,8 +98,34 @@ const materials = {
             }
         },
         ...createShader("objectScatter/rock")
-    })
+    }),
 } as { [key: string]: THREE.Material };
+
+const waterNormal = new TextureLoader().load(path.join(__dirname, './assets/textures/Water/normal.jpg'));
+waterNormal.wrapS = THREE.RepeatWrapping;
+waterNormal.wrapT = THREE.RepeatWrapping;
+waterNormal.repeat.set(1, 1);
+const waterMaterial = new ShaderMaterial({
+    uniforms: {
+        time: {
+            value: clock.getElapsedTime()
+        },
+        normalMap: {
+            value: waterNormal
+        },
+        lightPosition: {
+            value: light.position
+        },
+        viewPosition: {
+            value: camera.position
+        }
+    },
+    ...createShader("water")
+})
+
+waterMaterial.transparent = true;
+waterMaterial.opacity = 0.5;
+// waterMaterial.wireframe = true;
 
 
 // Mark as deprecated
@@ -202,8 +228,6 @@ loadModel("Tree", true);
 
 
 const gui = new GUI();
-
-const clock = new THREE.Clock();
 const renderer = new THREE.WebGLRenderer();
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -506,14 +530,6 @@ document.getElementById('webgl').appendChild(renderer.domElement);
 
 orbit_controls.target = new Vector3(0,0,0).addScalar(volumeSize).divideScalar(2);
 
-// Create an axes helper
-// const axesHelper = new AxesHelper( 5 );
-// scene.add( axesHelper );
-// const sandMaterial = createPBRMaterial(path.join(__dirname, './assets/textures/Sand'));
-// const grassMaterial = createPBRMaterial(path.join(__dirname, './assets/textures/Grass'));
-// const rockTexture = createPBRMaterial(path.join(__dirname, './assets/textures/Rock'));
-// const snowMaterial = createPBRMaterial(path.join(__dirname, './assets/textures/Snow'));
-
 interface TextureLayer {
     name: string;
     index: number;
@@ -568,11 +584,8 @@ const volumeMaterial = new ShaderMaterial({
         volumeScale: {
             value: volumeSize * volumesAmount
         },
-        worldLight: {
-            value: {
-                position: light.position,
-                direction: light.getWorldDirection(new Vector3()),
-            }
+        lightPosition: {
+            value: light.position,
         },
         viewPosition: {
             value: camera.position
@@ -594,7 +607,6 @@ mesh.position.set(0,0,0);
 mesh.receiveShadow = true;
 mesh.castShadow = true;
 scene.add(mesh);
-
 
 rockScatter = updateScatter(rockScatter);
 treeScatter = updateScatter(treeScatter);
@@ -765,6 +777,7 @@ const params = {
     'yBias': volume.yBias,
     'showEdges': volume.showEdges,
     'edgeSharpness': volume.edgeSharpness,
+    'waterLevel': 0,
 
     objects: [{
         name: 'Rock',
@@ -833,6 +846,7 @@ const params = {
                         break;
                     case 'showEdges':
                         volume.showEdges = params.showEdges;
+                        updateWater()
                         break;
                     case 'edgeSharpness':
                         volume.edgeSharpness = params.edgeSharpness;
@@ -919,6 +933,31 @@ const params = {
         }
     }
 }
+function updateWater() {
+    // Create a box named "Water" and add it to the scene
+    const volSize = volumeSize - Number(volume.showEdges);
+    if(scene.getObjectByName("Water")) {
+        // Change the geometry of the water
+        const water = scene.getObjectByName("Water") as THREE.Mesh;
+        water.geometry.dispose();
+        water.geometry = new THREE.BoxGeometry(1, 1, 1, volumeSize, params.waterLevel, volumeSize);
+        water.scale.set(volSize, params.waterLevel, volSize);
+
+        // Update the position so that the water's bottom is at y = 0
+        water.position.set(volSize * 0.5, params.waterLevel * 0.5, volSize * 0.5)
+    } else {
+        // Create the water
+        const water = new THREE.Mesh(
+            new THREE.BoxGeometry(1, 1, 1, volumeSize, params.waterLevel, volumeSize),
+            waterMaterial
+        );
+        water.scale.set(volSize, params.waterLevel, volSize);
+        water.position.set(volSize * 0.5, params.waterLevel * 0.5, volSize * 0.5)
+        water.name = "Water";
+        scene.add(water);
+    }
+}
+updateWater();
 
 // noiseFolder.add(params, 'noiseScale', 0.01, 10).onChange(() => params.actions.update("noiseScale")).name('Noise Scale');
 
@@ -936,6 +975,8 @@ for(let i = 0; i < textureLayers.length; i++) {
     layerFolder.add(layer, 'level', 0, 1).name('Maximum');
     layerFolder.add(layer, 'affectedByNormal')
 }
+
+volumeFolder.add(params, 'waterLevel', 0, volumeSize).onChange(() => updateWater()).name('Water Level');
 
 
 volumeFolder.add(params.actions, 'regenerate').name('Regenerate');
@@ -964,6 +1005,13 @@ function animate() {
 
 function render() {
     if(frameCount == 28) updateMesh(models);
+    waterMaterial.uniforms.time.value = clock.getElapsedTime();
+    waterMaterial.uniforms.viewPosition.value = camera.position;
+    waterMaterial.uniformsNeedUpdate = true;
+
+    volumeMaterial.uniforms.viewPosition.value = camera.position;
+    volumeMaterial.uniformsNeedUpdate = true;
+
     orbit_controls.update(clock.getDelta());
     
     renderer.render(scene, camera)
