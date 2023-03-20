@@ -130,5 +130,5 @@ dist/*.js*
 .yarn/install-state.gz
 .pnp.*
 
-procedural-environment-generation-win32-x64/
+procedural-environment-generation-*/
 
