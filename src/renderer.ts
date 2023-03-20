@@ -8,7 +8,7 @@
 // needed in the renderer process.
 
 // Get threejs
-import { Vector3, DirectionalLight, PerspectiveCamera, ShaderMaterial, Texture, AxesHelper, Intersection, Vector, Vector2, MeshBasicMaterial, BufferGeometry, LoadingManager, Object3D, Material } from 'three';
+import { Vector3, DirectionalLight, PerspectiveCamera, ShaderMaterial, Texture, AxesHelper, Intersection, Vector, Vector2, MeshBasicMaterial, BufferGeometry, LoadingManager, Object3D, Material, TextureLoader } from 'three';
 
 // Import objloader from local file
 import { OBJLoader, MTLLoader } from './loaders';
@@ -38,8 +38,6 @@ const volumesAmount = 1;
 interface PBRMaterial {
     albedo: Texture;
     normal: Texture;
-    roughness: Texture;
-    displacement: Texture;
     ao: Texture;
 }
 
@@ -54,32 +52,29 @@ const models = [] as THREE.Mesh[];
 interface ShaderPBR {
     albedo: THREE.Texture;
     normal: THREE.Texture;
-    roughness: THREE.Texture;
-    displacement: THREE.Texture;
     ao: THREE.Texture;
 }
 const MaterialUniform = (material: PBRMaterial) => {
     const result: ShaderPBR = {
         albedo: material.albedo,
         normal: material.normal,
-        roughness: material.roughness,
-        displacement: material.displacement,
         ao: material.ao
     }
     return result;
 }
 
 const Rock002 = createPBRMaterial(path.join(__dirname, './assets/textures/Rock002'), 'jpg');
+const Terrain = createPBRMaterial(path.join(__dirname, './assets/textures/Terrain'));
 
 // Example Three.js code
 const scene = new THREE.Scene();
 const light = new DirectionalLight(0xffffff, 1);
-light.position.set(volumeSize, volumeSize * 2, -volumeSize);
-light.shadow.camera.lookAt(new Vector3(volumeSize * 0.5, 1, volumeSize * 0.5));
-light.castShadow = true;
+light.position.set(volumeSize * 0.5, volumeSize, volumeSize * 0.5);
 scene.add(light);
 
 const camera = new PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000 );
+const clock = new THREE.Clock();
+clock.start();
 
 const materials = {
     "Rock002": new ShaderMaterial({
@@ -95,7 +90,7 @@ const materials = {
             worldLight: {
                 value: {
                     position: light.position,
-                    direction: light.getWorldDirection(new Vector3()),
+                    direction: light.getWorldDirection(new Vector3(volumeSize * 0.5, 0, volumeSize * 0.5)),
                 }
             },
             viewPosition: {
@@ -103,8 +98,34 @@ const materials = {
             }
         },
         ...createShader("objectScatter/rock")
-    })
+    }),
 } as { [key: string]: THREE.Material };
+
+const waterNormal = new TextureLoader().load(path.join(__dirname, './assets/textures/Water/normal.jpg'));
+waterNormal.wrapS = THREE.RepeatWrapping;
+waterNormal.wrapT = THREE.RepeatWrapping;
+waterNormal.repeat.set(1, 1);
+const waterMaterial = new ShaderMaterial({
+    uniforms: {
+        time: {
+            value: clock.getElapsedTime()
+        },
+        normalMap: {
+            value: waterNormal
+        },
+        lightPosition: {
+            value: light.position
+        },
+        viewPosition: {
+            value: camera.position
+        }
+    },
+    ...createShader("water")
+})
+
+waterMaterial.transparent = true;
+waterMaterial.opacity = 0.5;
+// waterMaterial.wireframe = true;
 
 
 // Mark as deprecated
@@ -132,8 +153,6 @@ function loadModelFile() {
 
 
     modelMesh.name = modelName;
-    mesh.receiveShadow = true;
-    mesh.castShadow = true;
     models.push(modelMesh);
 }
 
@@ -209,8 +228,6 @@ loadModel("Tree", true);
 
 
 const gui = new GUI();
-
-const clock = new THREE.Clock();
 const renderer = new THREE.WebGLRenderer();
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -228,80 +245,90 @@ for(let z = 0; z < volumesAmount; z++) {
         volumes.push(volume);
     }
 }
-
-for(let i = 0; i < volumes.length; i++) {
-    const volume = volumes[i];
-
-    // Get neighbours (including corners)
-    const neighbours = {
-        front: null as VolumeNew,
-        back: null as VolumeNew,
-        left: null as VolumeNew,
-        right: null as VolumeNew,
-        top: null as VolumeNew,
-        
-        frontLeft: null as VolumeNew,
-        frontRight: null as VolumeNew,
-        backLeft: null as VolumeNew,
-        backRight: null as VolumeNew
-    }
-
-    const x = i % volumesAmount;
-    const z = Math.floor(i / volumesAmount);
-
-    if(x > 0) {
-        neighbours.left = volumes[i - 1];
-    }
-
-    if(x < volumesAmount - 1) {
-        neighbours.right = volumes[i + 1];
-    }
-
-    if(z > 0) {
-        neighbours.back = volumes[i - volumesAmount];
-    }
-
-    if(z < volumesAmount - 1) {
-        neighbours.front = volumes[i + volumesAmount];
-    }
-
-    if(neighbours.left && neighbours.back) {
-        neighbours.backLeft = volumes[i - volumesAmount - 1];
-    }
-
-    if(neighbours.right && neighbours.back) {
-        neighbours.backRight = volumes[i - volumesAmount + 1];
-    }
-
-    if(neighbours.left && neighbours.front) {
-        neighbours.frontLeft = volumes[i + volumesAmount - 1];
-    }
-
-    if(neighbours.right && neighbours.front) {
-        neighbours.frontRight = volumes[i + volumesAmount + 1];
-    }
-
-    volume.neighbours = neighbours;
-}
-
 const volume = volumes[0];
 
+if(volumes.length > 1) {
+    for(let i = 0; i < volumes.length; i++) {
+        const volume = volumes[i];
+    
+        // Get neighbours (including corners)
+        const neighbours = {
+            front: null as VolumeNew,
+            back: null as VolumeNew,
+            left: null as VolumeNew,
+            right: null as VolumeNew,
+            top: null as VolumeNew,
+            
+            frontLeft: null as VolumeNew,
+            frontRight: null as VolumeNew,
+            backLeft: null as VolumeNew,
+            backRight: null as VolumeNew
+        }
+    
+        const x = i % volumesAmount;
+        const z = Math.floor(i / volumesAmount);
+    
+        if(x > 0) {
+            neighbours.left = volumes[i - 1];
+        }
+    
+        if(x < volumesAmount - 1) {
+            neighbours.right = volumes[i + 1];
+        }
+    
+        if(z > 0) {
+            neighbours.back = volumes[i - volumesAmount];
+        }
+    
+        if(z < volumesAmount - 1) {
+            neighbours.front = volumes[i + volumesAmount];
+        }
+    
+        if(neighbours.left && neighbours.back) {
+            neighbours.backLeft = volumes[i - volumesAmount - 1];
+        }
+    
+        if(neighbours.right && neighbours.back) {
+            neighbours.backRight = volumes[i - volumesAmount + 1];
+        }
+    
+        if(neighbours.left && neighbours.front) {
+            neighbours.frontLeft = volumes[i + volumesAmount - 1];
+        }
+    
+        if(neighbours.right && neighbours.front) {
+            neighbours.frontRight = volumes[i + volumesAmount + 1];
+        }
+    
+        volume.neighbours = neighbours;
+    }
+}
+
 interface ObjectScattering {
+    enabled: boolean,
     density: number,
+    scale: number,
     points: Vector3[],
-    intersects: Intersection[]
+    intersects: Intersection[],
+    normals: Vector3[]
 }
 
 let treeScatter: ObjectScattering = {
+    enabled: true,
     density: 25,
+    scale: 1,
     points: [],
-    intersects: []
+    intersects: [],
+    normals: []
 }
 
 let rockScatter: ObjectScattering = {
+    enabled: true,
     density: 100,
+    scale: 4,
     points: [],
-    intersects: []
+    intersects: [],
+    normals: []
 }
 
 const orbit_controls = new OrbitControls(camera, renderer.domElement)
@@ -323,8 +350,6 @@ function createPBRMaterial(texturePath: string, fileExtension = "png"): PBRMater
     const pbrMaterial: PBRMaterial = {
         albedo: null,
         normal: null,
-        roughness: null,
-        displacement: null,
         ao: null
     }
 
@@ -333,7 +358,7 @@ function createPBRMaterial(texturePath: string, fileExtension = "png"): PBRMater
             throw new Error(`File ${file} is not a ${fileExtension} file`);
         }
 
-        if(!['albedo', 'normal', 'roughness', 'displacement', 'ao'].includes(file.split('.')[0])) {
+        if(!['albedo', 'normal', 'ao'].includes(file.split('.')[0])) {
             throw new Error(`File ${file} is not a valid texture in ${texturePath}}`);
         }
 
@@ -348,12 +373,6 @@ function createPBRMaterial(texturePath: string, fileExtension = "png"): PBRMater
             case 'normal':
                 pbrMaterial.normal = texture;
                 break;
-            case 'roughness':
-                pbrMaterial.roughness = texture;
-                break;
-            case 'displacement':
-                pbrMaterial.displacement = texture;
-                break;
             case 'ao':
                 pbrMaterial.ao = texture;
                 break;
@@ -363,156 +382,146 @@ function createPBRMaterial(texturePath: string, fileExtension = "png"): PBRMater
     return pbrMaterial
 }
 
-function distributeObjects(pointCount: number) {
-    const objects = [];
-
-    for(let i = 0; i < pointCount; i++) {
-        const position = new Vector3(
-            Math.random() * (volumeSize - 2) + 2,
-            Math.random() * volumeSize,
-            Math.random() * (volumeSize - 2) + 2
-        );
-        
-        const xCoord = (position.x / volumeSize) * volume.noiseScale + volume.noiseOffset.x;
-        const yCoord = (position.y / volumeSize) * volume.noiseScale + volume.noiseOffset.y;
-        const zCoord = (position.z / volumeSize) * volume.noiseScale + volume.noiseOffset.z;
-
-        const noiseValue = volume.noise.perlin["3D"](xCoord, yCoord, zCoord);
-
-        // Get density around this point
-        let kernel = [];
-        for(let x = -1; x <= 1; x++) {
-            for(let y = -1; y <= 1; y++) {
-                for(let z = -1; z <= 1; z++) {
-                    const xCoord = ((position.x + x) / volumeSize) * volume.noiseScale + volume.noiseOffset.x;
-                    const yCoord = ((position.y + y) / volumeSize) * volume.noiseScale + volume.noiseOffset.y;
-                    const zCoord = ((position.z + z) / volumeSize) * volume.noiseScale + volume.noiseOffset.z;
-
-                    const noiseValue = volume.noise.perlin["3D"](xCoord, yCoord, zCoord);
-                    kernel.push(noiseValue);
-                }
-            }
-        }
-
-        const kernelSum = kernel.reduce((a, b) => a + b, 0);
-
-        const heightBias = (position.y / volumeSize);
-
-        const density = heightBias + (position.y / volume.yBias) - noiseValue;
-
-        // const viablePoint = density > volume.densityThreshold && density - kernelSum < 0.1;
-        const viablePoint = true;
-
-        // Based on the density, add the point to the array
-        if(viablePoint) 
-            objects.push(position);
-    }
-
-    return objects;
-}
-
-interface ObjectScatters {
-    points: Vector3[];
-    intersects: Intersection[];
-}
-function snapToTerrain(volumeMesh: THREE.Mesh, points: Vector3[]): ObjectScatters {
-    // Vertices is a flat array of x, y, z, x, y, z, x, y, z, etc
-    // Points is an array of Vector3s
-
-    // For each point, raycast down to the terrain and set the y value to the y value of the terrain
-    const newPoints = [];
-    const intersections = [];
-
-    for(const point of points) {
-        const raycaster = new THREE.Raycaster(point, new Vector3(0, -1, 0), 0, volumeSize);
-        const intersects = raycaster.intersectObject(volumeMesh);
-
-        if(intersects.length > 0) {
-            const newPoint = new Vector3(point.x, intersects[0].point.y, point.z);
-            newPoints.push(newPoint);
-            intersections.push(intersects[0]);
-        }
-    }
-
-    return {
-        points: newPoints,
-        intersects: intersections
-    };
-}
-
 interface MatrixSettings {
     position: Vector3 | null;
     rotation: Vector3 | null;
     scale: Vector3 | null;
 }
 
-function createInstancedMesh(geometry: THREE.BufferGeometry, material: THREE.Material, scattering: ObjectScatters, matrixSettings: MatrixSettings, randomRot = true): THREE.InstancedMesh {
-
-    // Valid points are the points that have their intersects.face.normal.normalized().y > 0;
-    const validPoints = [];
-
-
-    for(let i = 0; i < scattering.intersects.length; i++) {
-        const normal = scattering.intersects[i].face.normal.clone().normalize();
-
-        if(normal.y >= 0.9) {
-            validPoints.push(scattering.points[i]);
-        }
-    }
-
-    const count = validPoints.length;
-    const positions = validPoints;
-
+function createInstancedMesh(geometry: THREE.BufferGeometry, material: THREE.Material, scattering: ObjectScattering, matrixSettings: MatrixSettings, randomRot = true): THREE.InstancedMesh {
+    
+    const count = scattering.points.length;
     const mesh = new THREE.InstancedMesh(geometry, material, count);
-    mesh.castShadow = true;
-    mesh.receiveShadow = true;
-
     for(let i = 0; i < count; i++) {
-        const position = positions[i];
+        const position = scattering.points[i];
         const translation = new THREE.Matrix4().makeTranslation(position.x, position.y, position.z);
-
-        // Random rotation in any direction
-        const rotation = new THREE.Matrix4();
-        if(randomRot)
-            rotation.makeRotationY(Math.random() * Math.PI * 2);
-
-        const scale = new THREE.Matrix4().makeScale(1, 1, 1);
-
-        const matrixP = new THREE.Matrix4();
-
-        if(matrixSettings.position) {
-            matrixP.makeTranslation(matrixSettings.position.x, matrixSettings.position.y, matrixSettings.position.z);
-        }
-
-        const matrixR = new THREE.Matrix4();
-
-        if(matrixSettings.rotation) {
-            matrixR.makeRotationFromEuler(new THREE.Euler(matrixSettings.rotation.x, matrixSettings.rotation.y, matrixSettings.rotation.z));
-        }
-
-        const matrixS = new THREE.Matrix4();
-
-        if(matrixSettings.scale) {
-            matrixS.makeScale(matrixSettings.scale.x, matrixSettings.scale.y, matrixSettings.scale.z);
-        }
-
-
-        translation.multiply(matrixP);
-        rotation.multiply(matrixR);
-        scale.multiply(matrixS);
-
-
+        
+        // Add a small offset between -1.5 and 1.5 on the x and z axis
+        const offset = new THREE.Matrix4().makeTranslation(
+            (Math.random() - 0.5) * 3,
+            0,
+            (Math.random() - 0.5) * 3
+        );
 
         const matrix = new THREE.Matrix4();
         matrix.multiply(translation);
-        matrix.multiply(rotation);
+        matrix.multiply(offset);
+
+        if(randomRot) {
+            const rotation = new THREE.Matrix4().makeRotationY(Math.random() * Math.PI * 2);
+            matrix.multiply(rotation);
+        }
+
+        // Apply matrix settings
+        if(matrixSettings.position) {
+            const positionMatrix = new THREE.Matrix4().makeTranslation(
+                matrixSettings.position.x,
+                matrixSettings.position.y,
+                matrixSettings.position.z
+            );
+            matrix.multiply(positionMatrix);
+        }
+
+        if(matrixSettings.rotation) {
+            const rotationMatrix = new THREE.Matrix4().makeRotationFromEuler(
+                new THREE.Euler(
+                    matrixSettings.rotation.x,
+                    matrixSettings.rotation.y,
+                    matrixSettings.rotation.z
+                )
+            );
+            matrix.multiply(rotationMatrix);
+        }
+
+        // Randomly scale the object between 0.75 and 1.25
+        const scaleRandom = Math.random() * 0.5 + 0.75;
+        const scale = new THREE.Matrix4().makeScale(
+            scaleRandom,
+            scaleRandom,
+            scaleRandom
+        );
+
         matrix.multiply(scale);
+        if(matrixSettings.scale) {
+            const scaleMatrix = new THREE.Matrix4().makeScale(
+                matrixSettings.scale.x,
+                matrixSettings.scale.y,
+                matrixSettings.scale.z
+            );
+            matrix.multiply(scaleMatrix);
+        }
 
         mesh.setMatrixAt(i, matrix);
     }
 
-
     return mesh;
+
+
+    // // Valid points are the points that have their intersects.face.normal.normalized().y > 0;
+    // const validPoints = [];
+
+
+    // for(let i = 0; i < scattering.intersects.length; i++) {
+    //     const normal = scattering.intersects[i].face.normal.clone().normalize();
+
+    //     if(normal.y >= 0.9) {
+    //         validPoints.push(scattering.points[i]);
+    //     }
+    // }
+
+    // const count = validPoints.length;
+    // const positions = validPoints;
+
+    // const mesh = new THREE.InstancedMesh(geometry, material, count);
+    // mesh.castShadow = true;
+    // mesh.receiveShadow = true;
+
+    // for(let i = 0; i < count; i++) {
+    //     const position = positions[i];
+    //     const translation = new THREE.Matrix4().makeTranslation(position.x, position.y, position.z);
+
+    //     // Random rotation in any direction
+    //     const rotation = new THREE.Matrix4();
+    //     if(randomRot)
+    //         rotation.makeRotationY(Math.random() * Math.PI * 2);
+
+    //     const scale = new THREE.Matrix4().makeScale(1, 1, 1);
+
+    //     const matrixP = new THREE.Matrix4();
+
+    //     if(matrixSettings.position) {
+    //         matrixP.makeTranslation(matrixSettings.position.x, matrixSettings.position.y, matrixSettings.position.z);
+    //     }
+
+    //     const matrixR = new THREE.Matrix4();
+
+    //     if(matrixSettings.rotation) {
+    //         matrixR.makeRotationFromEuler(new THREE.Euler(matrixSettings.rotation.x, matrixSettings.rotation.y, matrixSettings.rotation.z));
+    //     }
+
+    //     const matrixS = new THREE.Matrix4();
+
+    //     if(matrixSettings.scale) {
+    //         matrixS.makeScale(matrixSettings.scale.x, matrixSettings.scale.y, matrixSettings.scale.z);
+    //     }
+
+
+    //     translation.multiply(matrixP);
+    //     rotation.multiply(matrixR);
+    //     scale.multiply(matrixS);
+
+
+
+    //     const matrix = new THREE.Matrix4();
+    //     matrix.multiply(translation);
+    //     matrix.multiply(rotation);
+    //     matrix.multiply(scale);
+
+    //     mesh.setMatrixAt(i, matrix);
+    // }
+
+
+    // return mesh;
 }
 
 renderer.setSize( window.innerWidth, window.innerHeight );
@@ -521,45 +530,36 @@ document.getElementById('webgl').appendChild(renderer.domElement);
 
 orbit_controls.target = new Vector3(0,0,0).addScalar(volumeSize).divideScalar(2);
 
-// Create an axes helper
-// const axesHelper = new AxesHelper( 5 );
-// scene.add( axesHelper );
-
-const sandMaterial = createPBRMaterial(path.join(__dirname, './assets/textures/Sand'));
-const grassMaterial = createPBRMaterial(path.join(__dirname, './assets/textures/Grass'));
-const rockTexture = createPBRMaterial(path.join(__dirname, './assets/textures/Rock'));
-const snowMaterial = createPBRMaterial(path.join(__dirname, './assets/textures/Snow'));
-
 interface TextureLayer {
     name: string;
-    material: ShaderPBR;
+    index: number;
     level: number;
     affectedByNormal: boolean;
 }
 const textureLayers: TextureLayer[] = [
     {
         name: "sand",
-        material: sandMaterial,
-        level: 1,
-        affectedByNormal: false,
+        index: 0,
+        level: 0.2,
+        affectedByNormal: true,
     },
     {
         name: "grass",
-        material: grassMaterial,
-        level: 1,
+        index: 1,
+        level: 0.4,
         affectedByNormal: true,
     },
     {
         name: "rock",
-        material: rockTexture,
-        level: 1,
-        affectedByNormal: false,
+        index: 2,
+        level: 0.7,
+        affectedByNormal: true,
     },
     {
         name: "snow",
-        material: snowMaterial,
+        index: 3,
         level: 1,
-        affectedByNormal: false,
+        affectedByNormal: true,
     }
 ];
 
@@ -568,6 +568,12 @@ const volumeMaterial = new ShaderMaterial({
     uniforms: {
         materials: {
             value: textureLayers
+        },
+        material: {
+            value: MaterialUniform(Terrain)
+        },
+        debug: {
+            value: 0
         },
         yBias: {
             value: volume.yBias
@@ -578,11 +584,8 @@ const volumeMaterial = new ShaderMaterial({
         volumeScale: {
             value: volumeSize * volumesAmount
         },
-        worldLight: {
-            value: {
-                position: light.position,
-                direction: light.getWorldDirection(new Vector3()),
-            }
+        lightPosition: {
+            value: light.position,
         },
         viewPosition: {
             value: camera.position
@@ -605,15 +608,96 @@ mesh.receiveShadow = true;
 mesh.castShadow = true;
 scene.add(mesh);
 
-rockScatter = updateScatter(rockScatter, mesh);
-treeScatter = updateScatter(treeScatter, mesh);
+rockScatter = updateScatter(rockScatter);
+treeScatter = updateScatter(treeScatter);
 
-function updateScatter(scattering: ObjectScattering, mesh: THREE.Mesh): ObjectScattering {
-    scattering.points = distributeObjects(scattering.density);
-    return scattering = {
-        ...scattering,
-        ...snapToTerrain(mesh, scattering.points)
+const treeNoise = new THREE.Group();
+treeNoise.name = "treeNoise";
+
+
+function updateScatter(scattering: ObjectScattering): ObjectScattering {
+
+    const data = {
+        offset: new Vector3(0,0,0),
+        scale: scattering.scale,
+        octaves: 2,
+        persistence: 0.75,
+        lacunarity: 2,
     }
+
+    const points = [] as Vector3[];
+    const normals = [] as Vector3[];
+    for(let i = 0; i < volumes.length; i++) {
+        const volume = volumes[i];
+        const heightMapData = volume.getHeightmap(data.scale);
+        // Move all points from volume's heightmap to points
+        for(let j = 0; j < heightMapData.length; j++) {
+            const data = heightMapData[j];
+            
+            if(data.normal.y >= 0.9) {
+                points.push(data.point);
+                normals.push(data.normal);
+            }
+        }
+        
+    }
+
+    // For each point in points, check if it's y value is greater than random
+    // If it is, add it to the scattering.points array
+    const newPoints = [] as Vector3[];
+    const newNormals = [] as Vector3[];
+
+    // Create a threejs group to hold the noise
+    const noiseGroup = new THREE.Group();
+    noiseGroup.name = "heightmapNoise";
+
+    // CHeck if the noise group already exists
+    const existingNoiseGroup = scene.getObjectByName("heightmapNoise");
+    if(existingNoiseGroup) {
+        scene.remove(existingNoiseGroup);
+    }
+    
+    const noise = new Noise(volume.seed * (Math.random() * 65536));
+    noise.setType("simplex");
+
+    for(const point of points) {
+        // If the points x and z values are 0 or volumeSize, skip it
+        if(point.x < 2 || point.x === volumeSize || point.z < 2 || point.z === volumeSize) continue;
+        const random = Math.random();
+
+        const noiseValue = noise.generate3DFBM(point, data, new Vector3(0,0,0));
+
+        if(noiseValue > random && scattering.density >= (noiseValue * 100)) {
+            newPoints.push(point);
+            newNormals.push(normals[points.indexOf(point)]);
+        }
+
+        // Create a cube to represent the noise
+        const cube = new THREE.Mesh(
+            new THREE.BoxGeometry(1, 1, 1),
+            new THREE.MeshBasicMaterial({
+                color: new THREE.Color(noiseValue, noiseValue, noiseValue)
+            })
+        );
+        cube.position.copy(point);
+        noiseGroup.add(cube);
+    }
+    //scene.add(noiseGroup);
+
+    return {
+        ...scattering,
+        points: newPoints,
+        normals: newNormals,
+    }
+
+    // const newPoints = points.filter(point => point.y > random);
+
+
+    // scattering.points = distributeObjects(scattering.density);
+    // return scattering = {
+    //     ...scattering,
+    //     ...snapToTerrain(mesh, scattering.points)
+    // }
 }
 
 function updateMesh(loadedModels: THREE.Mesh[]) {
@@ -629,8 +713,8 @@ function updateMesh(loadedModels: THREE.Mesh[]) {
     const mergedGeo = Volume.mergeGeometries(volumeGeos);
     mesh.geometry = mergedGeo;
 
-    rockScatter = updateScatter(rockScatter, mesh);
-    treeScatter = updateScatter(treeScatter, mesh);
+    rockScatter = updateScatter(rockScatter);
+    treeScatter = updateScatter(treeScatter);
 
     const radians = (degrees: number) => degrees * Math.PI / 180;
     const degrees = (radians: number) => radians * 180 / Math.PI;
@@ -640,21 +724,23 @@ function updateMesh(loadedModels: THREE.Mesh[]) {
         model.geometry.name = model.name;
 
         const scatterProperties = model.name.includes('Rock') ? rockScatter : treeScatter;
-            
-        const instancedModel = createInstancedMesh(model.geometry, mat, scatterProperties, {
-            position: null,
-            rotation: null,
-            scale: model.name.includes('Rock') ? new Vector3(5, 5, 5) : new Vector3(1, 1, 1)
-        }, model.name.includes('Rock'));
+        
+        // Check if the scene already has an instanced mesh with the same name
+        const existingInstancedMesh = scene.getObjectByName(model.name);
+        if(existingInstancedMesh)
+            scene.remove(existingInstancedMesh);
 
-        for(const child of scene.children) {
-            if(child.name === model.name) {
-                scene.remove(child);
-            }
+        
+        if(scatterProperties.enabled) {
+            const instancedModel = createInstancedMesh(model.geometry, mat, scatterProperties, {
+                position: null,
+                rotation: null,
+                scale: model.name.includes('Rock') ? new Vector3(5, 5, 5) : new Vector3(1, 1, 1)
+            }, model.name.includes('Rock'));
+
+            instancedModel.name = model.name;
+            scene.add(instancedModel);
         }
-
-        instancedModel.name = model.name;
-        scene.add(instancedModel);
     });
 }
 
@@ -691,10 +777,20 @@ const params = {
     'yBias': volume.yBias,
     'showEdges': volume.showEdges,
     'edgeSharpness': volume.edgeSharpness,
+    'waterLevel': 0,
 
-    objects: {
-        'density': rockScatter.density,
+    objects: [{
+        name: 'Rock',
+        density: rockScatter.density,
+        scale: rockScatter.scale,
+        enabled: rockScatter.enabled,
     },
+    {
+        name: 'Tree',
+        density: treeScatter.density,
+        scale: treeScatter.scale,
+        enabled: treeScatter.enabled,
+    }],
 
     actions: {
         addConfig: () => {
@@ -735,7 +831,7 @@ const params = {
 
             updateMesh(models);
         },
-        update(key: string) {
+        update(key: string, value: any = null) {
             for(const volume of volumes) {
                 switch(key) {
                     case 'seed':
@@ -750,14 +846,46 @@ const params = {
                         break;
                     case 'showEdges':
                         volume.showEdges = params.showEdges;
+                        updateWater()
                         break;
                     case 'edgeSharpness':
                         volume.edgeSharpness = params.edgeSharpness;
                         break;
 
                     case 'density':
-                        rockScatter.density = params.objects.density;
-                        rockScatter.points = distributeObjects(rockScatter.density);
+                        for(const obj of params.objects) {
+                            if(obj.name === 'Rock') {
+                                rockScatter.density = obj.density;
+                                obj.density = rockScatter.density;
+                            } else if(obj.name === 'Tree') {
+                                treeScatter.density = obj.density;
+                                obj.density = treeScatter.density;
+                            }
+                        }
+                        break;
+
+                    case 'scale':
+                        for(const obj of params.objects) {
+                            if(obj.name === 'Rock') {
+                                rockScatter.scale = obj.scale;
+                                obj.scale = rockScatter.scale;
+                            } else if(obj.name === 'Tree') {
+                                treeScatter.scale = obj.scale;
+                                obj.scale = treeScatter.scale;
+                            }
+                        }
+                        break;
+
+                    case 'enabled':
+                        for(const obj of params.objects) {
+                            if(obj.name === 'Rock') {
+                                rockScatter.enabled = obj.enabled;
+                                obj.enabled = rockScatter.enabled;
+                            } else if(obj.name === 'Tree') {
+                                treeScatter.enabled = obj.enabled;
+                                obj.enabled = treeScatter.enabled;
+                            }
+                        }
                         break;
                                 
                     default:
@@ -805,15 +933,31 @@ const params = {
         }
     }
 }
+function updateWater() {
+    // Create a box named "Water" and add it to the scene
+    const volSize = volumeSize - Number(volume.showEdges);
+    if(scene.getObjectByName("Water")) {
+        // Change the geometry of the water
+        const water = scene.getObjectByName("Water") as THREE.Mesh;
+        water.geometry.dispose();
+        water.geometry = new THREE.BoxGeometry(1, 1, 1, volumeSize, params.waterLevel, volumeSize);
+        water.scale.set(volSize, params.waterLevel, volSize);
 
-// Render the render target to the screen
-const planeGeo = new THREE.PlaneGeometry(2, 2);
-const planeMaterial = new MeshBasicMaterial({
-    map: depthRenderer.texture,
-    side: THREE.DoubleSide
-});
-const planeMesh = new THREE.Mesh(planeGeo, planeMaterial);
-scene.add(planeMesh);
+        // Update the position so that the water's bottom is at y = 0
+        water.position.set(volSize * 0.5, params.waterLevel * 0.5, volSize * 0.5)
+    } else {
+        // Create the water
+        const water = new THREE.Mesh(
+            new THREE.BoxGeometry(1, 1, 1, volumeSize, params.waterLevel, volumeSize),
+            waterMaterial
+        );
+        water.scale.set(volSize, params.waterLevel, volSize);
+        water.position.set(volSize * 0.5, params.waterLevel * 0.5, volSize * 0.5)
+        water.name = "Water";
+        scene.add(water);
+    }
+}
+updateWater();
 
 // noiseFolder.add(params, 'noiseScale', 0.01, 10).onChange(() => params.actions.update("noiseScale")).name('Noise Scale');
 
@@ -832,11 +976,19 @@ for(let i = 0; i < textureLayers.length; i++) {
     layerFolder.add(layer, 'affectedByNormal')
 }
 
+volumeFolder.add(params, 'waterLevel', 0, volumeSize).onChange(() => updateWater()).name('Water Level');
+
 
 volumeFolder.add(params.actions, 'regenerate').name('Regenerate');
 
-const objectFolder = gui.addFolder('Object Settings');
-objectFolder.add(params.objects, 'density', 0, 100).onChange(() => params.actions.update("density")).name('Density');
+const objectsFolder = gui.addFolder('Object Settings');
+for(const object of params.objects) {
+    const objectFolder = objectsFolder.addFolder(object.name);
+    objectFolder.add(object, 'enabled').name('Enabled').onChange(() => params.actions.update("enabled", object.name));
+    objectFolder.add(object, 'density', 0, 100).onChange(() => params.actions.update("density", object.name)).name('Density');
+    objectFolder.add(object, 'scale', 0.1, 4).name('Scale').onChange(() => params.actions.update("scale", object.name));
+}
+
 
 params.actions.createConfigFolders()
 
@@ -853,6 +1005,13 @@ function animate() {
 
 function render() {
     if(frameCount == 28) updateMesh(models);
+    waterMaterial.uniforms.time.value = clock.getElapsedTime();
+    waterMaterial.uniforms.viewPosition.value = camera.position;
+    waterMaterial.uniformsNeedUpdate = true;
+
+    volumeMaterial.uniforms.viewPosition.value = camera.position;
+    volumeMaterial.uniformsNeedUpdate = true;
+
     orbit_controls.update(clock.getDelta());
     
     renderer.render(scene, camera)
