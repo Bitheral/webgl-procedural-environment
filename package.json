@@ -8,8 +8,8 @@
     "lint": "eslint -c .eslintrc --ext .ts ./src",
     "start": "npm run build && electron ./dist/main.js",
     "electron:build": "npm run build && electron-packager . --overwrite -p --asar",
-    "electron:build:linux": "npm run build && electron-packager . --overwrite -p --asar --platform=linux",
-    "electron:build:win32": "npm run build && electron-packager . --overwrite -p --asar --platform=win32"
+    "electron:build:linux": "npm run build && electron-packager . procedural-environment-generation.AppImage --overwrite -p --asar --platform=linux --ignore=\"(src|.*\\.gitignore|.*\\.eslintrc|.*tsconfig\\.json|.*pnpm-lock\\.yaml|.*debug\\.log)\"",
+    "electron:build:win": "npm run build && electron-packager . --overwrite -p --asar --platform=win32 --ignore=\"(src|.*\\.gitignore|.*\\.eslintrc|.*tsconfig\\.json|.*pnpm-lock\\.yaml|.*debug\\.log)\""
   },
   "main": "dist/main.js",
   "repository": {
@@ -38,7 +38,7 @@
     "typescript": "^4.8.3"
   },
   "dependencies": {
-    "@bitheral/marching-cubes": "^1.4.3",
+    "@bitheral/marching-cubes": "^1.4.5",
     "@types/dat.gui": "^0.7.7",
     "@types/stats.js": "^0.17.0",
     "@types/three": "^0.144.0",

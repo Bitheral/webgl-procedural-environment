@@ -1,4 +1,4 @@
-import { app, BrowserWindow, session } from "electron";
+import { app, BrowserWindow, Menu, MenuItemConstructorOptions } from "electron";
 import * as path from "path";
 import * as os from 'os';
 
@@ -15,7 +15,46 @@ function createWindow() {
     icon: path.join(__dirname, "assets", "icons", "icon.png") || undefined,
   });
 
-  // Menu.setApplicationMenu(menu);
+  // Create a custom menu template
+  const menuTemplate: MenuItemConstructorOptions[] = [
+    {
+      label: 'File',
+      submenu: [
+        {
+          label: 'Quit',
+          accelerator: 'CmdOrCtrl+Q',
+          click: () => {
+            app.quit();
+          }
+        }
+      ]
+    },
+    {
+      label: 'View',
+      submenu: [
+        { label: 'Reload', accelerator: 'CmdOrCtrl+R', click: () => { mainWindow.reload(); } },
+        { label: 'Force Reload', accelerator: 'Shift+CmdOrCtrl+R', click: () => { mainWindow.webContents.reloadIgnoringCache(); } },
+        { type: 'separator' },
+        { label: 'Toggle Full Screen', accelerator: 'F11', click: () => { mainWindow.setFullScreen(!mainWindow.isFullScreen()); } },
+        { label: 'Toggle Developer Tools', accelerator: 'Alt+CmdOrCtrl+I', click: () => { mainWindow.webContents.toggleDevTools(); } }
+      ]
+    },
+    {
+      label: 'Window',
+      submenu: [
+        { label: 'Minimize', accelerator: 'CmdOrCtrl+M', role: 'minimize' },
+        { type: 'separator' },
+        { label: 'Close', accelerator: 'CmdOrCtrl+W', role: 'close' }
+      ]
+    }
+  ];
+
+  // Build the menu from the template
+  const menu = Menu.buildFromTemplate(menuTemplate);
+
+  // Set the application menu
+  Menu.setApplicationMenu(menu);
+
 
   // and load the index.html of the app.
   mainWindow.loadFile(path.join(__dirname, "../index.html"));

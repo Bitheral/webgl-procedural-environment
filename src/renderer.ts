@@ -125,7 +125,7 @@ const waterMaterial = new ShaderMaterial({
 
 waterMaterial.transparent = true;
 waterMaterial.opacity = 0.5;
-// waterMaterial.wireframe = true;
+waterMaterial.side = THREE.DoubleSide;
 
 
 // Mark as deprecated
@@ -139,25 +139,38 @@ function addModel(model: Object3D, name: string, ignoreMaterial = false) {
 }
 
 let modelToLoad: Object3D;
-function loadModelFile() {
-    const modelMesh = modelToLoad.children[0] as THREE.Mesh;
-    const modelName = modelToLoad.name;
+function loadModelFile(model: Object3D, name: string, material: Material | Material[] = null) {
+    console.log("Loading model: " + name + "");
+    const modelMesh = model.children[0] as THREE.Mesh;
+    const modelName = name;
+    
+    if(material !== null) {
+        console.log(material)
+        if(Array.isArray(material)) {
+            modelMesh.material = material;
+        }
+        else {
+            let finalMaterials = Object.values(material);
+            if(name == "Tree") {            
+                // Get index of key "leaf"
+                const leafM = finalMaterials[Object.keys(material).indexOf("leaf")];
+                const bark = finalMaterials[Object.keys(material).indexOf("bark")];
 
-    modelMesh.material = materials[modelName];
+                finalMaterials = [
+                    leafM,
+                    bark
+                ]
+            }
 
-    if(objLoader.materials) {
-        const materialsArray = Object.values(objLoader.materials.materials);
-        materialsArray.reverse();
-        modelMesh.material = materialsArray as Material[];
+            modelMesh.material = finalMaterials;
+        }
     }
-
+    else modelMesh.material = materials[modelName];
 
     modelMesh.name = modelName;
     models.push(modelMesh);
 }
-
-const loadingManager = new THREE.LoadingManager(loadModelFile);
-const objLoader = new OBJLoader(loadingManager);
+const objLoader = new OBJLoader();
 const mtlLoader = new MTLLoader();
 
 function loadModel(file: string, loadMaterialFromFile = false) {
@@ -180,7 +193,6 @@ function loadModel(file: string, loadMaterialFromFile = false) {
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 materials: any; preload: () => void; 
             }) => {
-
                 for(let i = 0; i < materials.materials.length; i++) {
                     const material = materials.materials[i];
                     if(material.name === "leaf") {
@@ -201,6 +213,8 @@ function loadModel(file: string, loadMaterialFromFile = false) {
                     (object: Object3D) => {
                         modelToLoad = object
                         modelToLoad.name = file;
+
+                        loadModelFile(object, file, materials.materials);
                         //addModel(object, file, true);
                     },
                     onProgress,
@@ -216,6 +230,9 @@ function loadModel(file: string, loadMaterialFromFile = false) {
             (object: Object3D) => {
                 modelToLoad = object
                 modelToLoad.name = file;
+
+                loadModelFile(object, file);
+                //addModel(object, file, true);
             },
             onProgress,
             onError
@@ -223,8 +240,8 @@ function loadModel(file: string, loadMaterialFromFile = false) {
     }
 }
 
-loadModel("Rock002");
 loadModel("Tree", true);
+loadModel("Rock002");
 
 
 const gui = new GUI();
@@ -232,14 +249,20 @@ const renderer = new THREE.WebGLRenderer();
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
+let volumeSeed = new Date().getTime();
+volumeSeed %= 65536;
+
+
 const volumes = [] as VolumeNew[];
 for(let z = 0; z < volumesAmount; z++) {
     for(let x = 0; x < volumesAmount; x++) {
 
         const pos = new Vector3(x, 0, z);
-
         const volume = new VolumeNew(volumeSize, pos);
         volume.showEdges = true;
+        volume.edgeSharpness = 100;
+        volume.seed = volumeSeed;
+        volume.noiseSeed = Volume.createSeed(volumeSeed);
         volume.March();
 
         volumes.push(volume);
@@ -699,8 +722,14 @@ function updateScatter(scattering: ObjectScattering): ObjectScattering {
     //     ...snapToTerrain(mesh, scattering.points)
     // }
 }
+const ob = {
+    seed: volume.seed,
+    autoUpdate: false,
+}
 
-function updateMesh(loadedModels: THREE.Mesh[]) {
+function updateMesh(loadedModels: THREE.Mesh[], forced = false) {
+    if(!ob.autoUpdate && !forced) return;
+
     for(const volume of volumes) {
         volume.update("noise");
         volume.update("geometry");
@@ -746,14 +775,6 @@ function updateMesh(loadedModels: THREE.Mesh[]) {
 
 
 //#region GUI
-gui.add(mesh.position, 'x', -volumeSize, volumeSize).name('Mesh Position (X axis)');
-gui.add(mesh.position, 'y', -volumeSize, volumeSize).name('Mesh Position (Y axis)');
-gui.add(mesh.position, 'z', -volumeSize, volumeSize).name('Mesh Position (Z axis)');
-
-const ob = {
-    seed: volume.seed,
-}
-
 const noiseFolder = gui.addFolder('Noise Settings');
 noiseFolder.add(ob, 'seed', -65566, 65536).onChange(() => {
     volume.seed = ob.seed;
@@ -773,6 +794,7 @@ const params = {
             'open': false
         },
     ],
+    'regenerateAuto': false,
     'densityThreshold': volume.densityThreshold,
     'yBias': volume.yBias,
     'showEdges': volume.showEdges,
@@ -896,17 +918,17 @@ const params = {
             updateMesh(models);
         },
         regenerate: () => {
-            let newSeed = new Date().getTime();
-            newSeed %= 65536;
-            ob.seed = newSeed;
+            // let newSeed = new Date().getTime();
+            // newSeed %= 65536;
+            // ob.seed = newSeed;
 
             for(const volume of volumes) {
-                volume.seed = newSeed;
+                // volume.seed = newSeed;
                 volume.noiseConfigs = params.configs;
-                volume.noiseSeed = Volume.createSeed(volume.seed);
+                // volume.noiseSeed = Volume.createSeed(volume.seed);
             }
 
-            updateMesh(models);
+            updateMesh(models, true);
         },
         createConfigFolders: () => {
             for(let i = 0; i < params.configs.length; i++) {
@@ -961,33 +983,36 @@ updateWater();
 
 // noiseFolder.add(params, 'noiseScale', 0.01, 10).onChange(() => params.actions.update("noiseScale")).name('Noise Scale');
 
-const volumeFolder = gui.addFolder('Volume Settings');
+const volumeFolder = gui.addFolder('Terrain');
 volumeFolder.add(params, 'densityThreshold', -1, 1).onChange(() => params.actions.update("densityThreshold")).name('Density Threshold');
-volumeFolder.add(params, 'yBias', 0, volumeSize).onChange(() => params.actions.update("yBias")).name('Y Bias');
+volumeFolder.add(params, 'yBias', 0, volumeSize).onChange(() => params.actions.update("yBias")).name('Elevation limit');
 volumeFolder.add(params, 'showEdges').onChange(() => params.actions.update("showEdges")).name('Show Edges');
-volumeFolder.add(params, 'edgeSharpness', 0, 100).onChange(() => params.actions.update("edgeSharpness")).name('Edge Sharpness');
 
 const textureLayersFolder = volumeFolder.addFolder('Texture Layers');
 for(let i = 0; i < textureLayers.length; i++) {
     const layer = textureLayers[i];
     const layerName = layer.name.charAt(0).toUpperCase() + layer.name.slice(1);
     const layerFolder = textureLayersFolder.addFolder(layerName);
-    layerFolder.add(layer, 'level', 0, 1).name('Maximum');
+    layerFolder.add(layer, 'level', 0, 1).name('Level');
     layerFolder.add(layer, 'affectedByNormal')
 }
 
-volumeFolder.add(params, 'waterLevel', 0, volumeSize).onChange(() => updateWater()).name('Water Level');
-
-
-volumeFolder.add(params.actions, 'regenerate').name('Regenerate');
-
-const objectsFolder = gui.addFolder('Object Settings');
+const envFolder = gui.addFolder('Environment');
+const objectsFolder = envFolder.addFolder('Scatttering');
 for(const object of params.objects) {
     const objectFolder = objectsFolder.addFolder(object.name);
     objectFolder.add(object, 'enabled').name('Enabled').onChange(() => params.actions.update("enabled", object.name));
     objectFolder.add(object, 'density', 0, 100).onChange(() => params.actions.update("density", object.name)).name('Density');
     objectFolder.add(object, 'scale', 0.1, 4).name('Scale').onChange(() => params.actions.update("scale", object.name));
 }
+
+const waterFolder = envFolder.addFolder('Water');
+waterFolder.add(scene.children.find(child => child.name == 'Water'), 'visible').name('Show Water');
+waterFolder.add(params, 'waterLevel', 0, volumeSize).onChange(() => updateWater()).name('Water Level');
+
+gui.add(ob, 'autoUpdate').name('Auto Update');
+const regenButton = gui.add(params.actions, 'regenerate')
+regenButton.name('Regenerate');
 
 
 params.actions.createConfigFolders()
@@ -998,13 +1023,13 @@ let frameCount = 0;
 
 // Camera orbit around center of the volume
 function animate() {
-    requestAnimationFrame(animate)
+    requestAnimationFrame(animate);
     render()
     stats.update();
 }
 
 function render() {
-    if(frameCount == 28) updateMesh(models);
+    if(frameCount == 20) updateMesh(models, true);
     waterMaterial.uniforms.time.value = clock.getElapsedTime();
     waterMaterial.uniforms.viewPosition.value = camera.position;
     waterMaterial.uniformsNeedUpdate = true;

@@ -8,9 +8,9 @@ Ke 0.000000 0.000000 0.000000
 Ni 1.450000
 d 1.000000
 illum 1
-map_Kd textures/Tree/ugineitn_4K_Albedo.jpg
-map_Ns textures/Tree/ugineitn_4K_Roughness.jpg
-map_Bump -bm 0.050000 textures/Tree/ugineitn_4K_Normal.jpg
+map_Kd ../textures/Tree/ugineitn_4K_Albedo.jpg
+map_Ns ../textures/Tree/ugineitn_4K_Roughness.jpg
+map_Bump -bm 0.050000 ../textures/Tree/ugineitn_4K_Normal.jpg
 
 newmtl leaf
 Ns 0.000000
@@ -19,6 +19,6 @@ Ks 0.000000 0.000000 0.000000
 Ke 0.000000 0.000000 0.000000
 Ni 1.450000
 illum 1
-map_Kd textures/Tree/labang-gigapixel.png
-map_d textures/Tree/labang-gigapixel-opacity.png
-map_Bump -bm 0.001000 textures/Tree/labangnormal.png
+map_Kd ../textures/Tree/labang-gigapixel.png
+map_d ../textures/Tree/labang-gigapixel-opacity.png
+map_Bump -bm 0.001000 ../textures/Tree/labangnormal.png
