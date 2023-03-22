@@ -171,7 +171,7 @@ void main() {
 
     // Based on the normals, we can determine which side of the cube we are on
     // and sample the correct material
-    if(!materials[layer].affectedByNormal) {
+    if(materials[layer].affectedByNormal) {
         if (normals.x <= 0.5) {
             sideM = sampleMaterial(material, uv_left * scale + offset);
         } else {

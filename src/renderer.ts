@@ -259,10 +259,22 @@ for(let z = 0; z < volumesAmount; z++) {
 
         const pos = new Vector3(x, 0, z);
         const volume = new VolumeNew(volumeSize, pos);
+        volume.densityThreshold = -0.2;
         volume.showEdges = true;
         volume.edgeSharpness = 100;
         volume.seed = volumeSeed;
         volume.noiseSeed = Volume.createSeed(volumeSeed);
+
+        volume.noiseConfigs = [
+            {
+                'scale': 2.5,
+                'octaves': 5,
+                'persistence': 0.5,
+                'lacunarity': 2,
+                'offset': new Vector3(0, 0, 0)
+            }
+        ]
+
         volume.March();
 
         volumes.push(volume);
@@ -564,25 +576,25 @@ const textureLayers: TextureLayer[] = [
         name: "sand",
         index: 0,
         level: 0.2,
-        affectedByNormal: true,
+        affectedByNormal: false,
     },
     {
         name: "grass",
         index: 1,
         level: 0.4,
-        affectedByNormal: true,
+        affectedByNormal: false,
     },
     {
         name: "rock",
         index: 2,
         level: 0.7,
-        affectedByNormal: true,
+        affectedByNormal: false,
     },
     {
         name: "snow",
         index: 3,
         level: 1,
-        affectedByNormal: true,
+        affectedByNormal: false,
     }
 ];
 
@@ -786,8 +798,8 @@ let noiseConfigsFolder = noiseFolder.addFolder('Noise Configs');
 const params = {
     'configs': [
         {
-            'scale': 1,
-            'octaves': 4,
+            'scale': 2.5,
+            'octaves': 5,
             'persistence': 0.5,
             'lacunarity': 2,
             'offset': new Vector3(0,0,0),
@@ -817,12 +829,12 @@ const params = {
     actions: {
         addConfig: () => {
             params.configs.push({
-                'scale': 1,
-                'octaves': 4,
+                'scale': 2.5,
+                'octaves': 5,
                 'persistence': 0.5,
                 'lacunarity': 2,
-                'offset': new Vector3(0,0,0),
-                'open': false
+                'offset': new Vector3(0, 0, 0),
+                open: false
             });
 
             // Refresh the folder so that the new config is added
@@ -994,7 +1006,7 @@ for(let i = 0; i < textureLayers.length; i++) {
     const layerName = layer.name.charAt(0).toUpperCase() + layer.name.slice(1);
     const layerFolder = textureLayersFolder.addFolder(layerName);
     layerFolder.add(layer, 'level', 0, 1).name('Level');
-    layerFolder.add(layer, 'affectedByNormal')
+    if(layerName !== "Rock") layerFolder.add(layer, 'affectedByNormal').name('Show on edge');
 }
 
 const envFolder = gui.addFolder('Environment');
@@ -1029,7 +1041,7 @@ function animate() {
 }
 
 function render() {
-    if(frameCount == 20) updateMesh(models, true);
+    if(frameCount == 28) updateMesh(models, true);
     waterMaterial.uniforms.time.value = clock.getElapsedTime();
     waterMaterial.uniforms.viewPosition.value = camera.position;
     waterMaterial.uniformsNeedUpdate = true;

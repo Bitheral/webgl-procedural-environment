@@ -1,6 +1,44 @@
-import { app, BrowserWindow, Menu, MenuItemConstructorOptions } from "electron";
+import { app, BrowserWindow, Menu, MenuItemConstructorOptions, BrowserWindowConstructorOptions } from "electron";
 import * as path from "path";
 import * as os from 'os';
+
+function createModal(mainWindow: BrowserWindow, pathToPage: string, options = {} as BrowserWindowConstructorOptions) {
+  const modal = new BrowserWindow({
+    parent: mainWindow,
+    modal: true,
+    show: false,
+    webPreferences: {
+      nodeIntegration: false,
+      contextIsolation: false
+    },
+    icon: path.join(__dirname, "assets", "icons", "icon.png") || undefined,
+    width: 600,
+    height: 400,
+    ...options
+  });
+
+  // Set window position
+  const windowBounds = mainWindow.getBounds();
+  const modalBounds = modal.getBounds();
+  modal.setBounds({
+    x: windowBounds.x + windowBounds.width / 2 - modalBounds.width / 2,
+    y: windowBounds.y + windowBounds.height / 2 - modalBounds.height / 2,
+    width: modalBounds.width,
+    height: modalBounds.height
+  });
+
+  modal.loadFile(path.join(__dirname, pathToPage));
+
+  modal.once("ready-to-show", () => {
+    modal.show();
+  });
+
+  // Remove menu from modal
+  modal.setMenu(null);
+
+  // Do not allow user interaction with modal
+  modal.setIgnoreMouseEvents(true);
+}
 
 function createWindow() {
   // Create the browser window.
@@ -45,6 +83,26 @@ function createWindow() {
         { label: 'Minimize', accelerator: 'CmdOrCtrl+M', role: 'minimize' },
         { type: 'separator' },
         { label: 'Close', accelerator: 'CmdOrCtrl+W', role: 'close' }
+      ]
+    },
+    {
+      label: 'Help',
+      submenu: [
+        {
+          label: 'About',
+          click: () => {
+            createModal(mainWindow, '../about.html');
+          }
+        },
+        {
+          label: 'Controls',
+          click: () => {
+            createModal(mainWindow, '../controls.html', {
+              width: 580,
+              height: 240,
+            });
+          }
+        }
       ]
     }
   ];
