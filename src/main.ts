@@ -5,39 +5,22 @@ import * as os from 'os';
 function createModal(mainWindow: BrowserWindow, pathToPage: string, options = {} as BrowserWindowConstructorOptions) {
   const modal = new BrowserWindow({
     parent: mainWindow,
-    modal: true,
     show: false,
-    webPreferences: {
-      nodeIntegration: false,
-      contextIsolation: false
-    },
-    icon: path.join(__dirname, "assets", "icons", "icon.png") || undefined,
-    width: 600,
-    height: 400,
-    ...options
-  });
-
-  // Set window position
-  const windowBounds = mainWindow.getBounds();
-  const modalBounds = modal.getBounds();
-  modal.setBounds({
-    x: windowBounds.x + windowBounds.width / 2 - modalBounds.width / 2,
-    y: windowBounds.y + windowBounds.height / 2 - modalBounds.height / 2,
-    width: modalBounds.width,
-    height: modalBounds.height
+    ...options,
   });
 
   modal.loadFile(path.join(__dirname, pathToPage));
 
-  modal.once("ready-to-show", () => {
+  modal.once('ready-to-show', () => {
     modal.show();
   });
 
-  // Remove menu from modal
-  modal.setMenu(null);
+  modal.on('closed', () => {
+    modal.destroy();
+  });
 
-  // Do not allow user interaction with modal
-  modal.setIgnoreMouseEvents(true);
+  // Remove the menu from the modal
+  modal.setMenu(null);
 }
 
 function createWindow() {
@@ -99,7 +82,7 @@ function createWindow() {
           click: () => {
             createModal(mainWindow, '../controls.html', {
               width: 580,
-              height: 240,
+              height: os.platform() == 'linux' ? 240 : 260,
             });
           }
         }

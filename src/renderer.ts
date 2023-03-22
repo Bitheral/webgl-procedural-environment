@@ -490,73 +490,6 @@ function createInstancedMesh(geometry: THREE.BufferGeometry, material: THREE.Mat
     }
 
     return mesh;
-
-
-    // // Valid points are the points that have their intersects.face.normal.normalized().y > 0;
-    // const validPoints = [];
-
-
-    // for(let i = 0; i < scattering.intersects.length; i++) {
-    //     const normal = scattering.intersects[i].face.normal.clone().normalize();
-
-    //     if(normal.y >= 0.9) {
-    //         validPoints.push(scattering.points[i]);
-    //     }
-    // }
-
-    // const count = validPoints.length;
-    // const positions = validPoints;
-
-    // const mesh = new THREE.InstancedMesh(geometry, material, count);
-    // mesh.castShadow = true;
-    // mesh.receiveShadow = true;
-
-    // for(let i = 0; i < count; i++) {
-    //     const position = positions[i];
-    //     const translation = new THREE.Matrix4().makeTranslation(position.x, position.y, position.z);
-
-    //     // Random rotation in any direction
-    //     const rotation = new THREE.Matrix4();
-    //     if(randomRot)
-    //         rotation.makeRotationY(Math.random() * Math.PI * 2);
-
-    //     const scale = new THREE.Matrix4().makeScale(1, 1, 1);
-
-    //     const matrixP = new THREE.Matrix4();
-
-    //     if(matrixSettings.position) {
-    //         matrixP.makeTranslation(matrixSettings.position.x, matrixSettings.position.y, matrixSettings.position.z);
-    //     }
-
-    //     const matrixR = new THREE.Matrix4();
-
-    //     if(matrixSettings.rotation) {
-    //         matrixR.makeRotationFromEuler(new THREE.Euler(matrixSettings.rotation.x, matrixSettings.rotation.y, matrixSettings.rotation.z));
-    //     }
-
-    //     const matrixS = new THREE.Matrix4();
-
-    //     if(matrixSettings.scale) {
-    //         matrixS.makeScale(matrixSettings.scale.x, matrixSettings.scale.y, matrixSettings.scale.z);
-    //     }
-
-
-    //     translation.multiply(matrixP);
-    //     rotation.multiply(matrixR);
-    //     scale.multiply(matrixS);
-
-
-
-    //     const matrix = new THREE.Matrix4();
-    //     matrix.multiply(translation);
-    //     matrix.multiply(rotation);
-    //     matrix.multiply(scale);
-
-    //     mesh.setMatrixAt(i, matrix);
-    // }
-
-
-    // return mesh;
 }
 
 renderer.setSize( window.innerWidth, window.innerHeight );
@@ -724,15 +657,6 @@ function updateScatter(scattering: ObjectScattering): ObjectScattering {
         points: newPoints,
         normals: newNormals,
     }
-
-    // const newPoints = points.filter(point => point.y > random);
-
-
-    // scattering.points = distributeObjects(scattering.density);
-    // return scattering = {
-    //     ...scattering,
-    //     ...snapToTerrain(mesh, scattering.points)
-    // }
 }
 const ob = {
     seed: volume.seed,
@@ -787,7 +711,9 @@ function updateMesh(loadedModels: THREE.Mesh[], forced = false) {
 
 
 //#region GUI
-const noiseFolder = gui.addFolder('Noise Settings');
+const volumeFolder = gui.addFolder('Terrain');
+
+const noiseFolder = volumeFolder.addFolder('Noise Settings');
 noiseFolder.add(ob, 'seed', -65566, 65536).onChange(() => {
     volume.seed = ob.seed;
     volume.noiseSeed = Volume.createSeed(volume.seed);
@@ -930,14 +856,8 @@ const params = {
             updateMesh(models);
         },
         regenerate: () => {
-            // let newSeed = new Date().getTime();
-            // newSeed %= 65536;
-            // ob.seed = newSeed;
-
             for(const volume of volumes) {
-                // volume.seed = newSeed;
                 volume.noiseConfigs = params.configs;
-                // volume.noiseSeed = Volume.createSeed(volume.seed);
             }
 
             updateMesh(models, true);
@@ -993,9 +913,6 @@ function updateWater() {
 }
 updateWater();
 
-// noiseFolder.add(params, 'noiseScale', 0.01, 10).onChange(() => params.actions.update("noiseScale")).name('Noise Scale');
-
-const volumeFolder = gui.addFolder('Terrain');
 volumeFolder.add(params, 'densityThreshold', -1, 1).onChange(() => params.actions.update("densityThreshold")).name('Density Threshold');
 volumeFolder.add(params, 'yBias', 0, volumeSize).onChange(() => params.actions.update("yBias")).name('Elevation limit');
 volumeFolder.add(params, 'showEdges').onChange(() => params.actions.update("showEdges")).name('Show Edges');
