@@ -45,6 +45,6 @@
     "dat.gui": "^0.7.9",
     "stats.js": "^0.17.0",
     "three": "^0.145.0",
-    "three-orbitcontrols": "github:Bitheral/three-orbitcontrols"
+    "three-orbitcontrols": "git@github.com:Bitheral/three-orbitcontrols.git#0e43f1c6143c1a4c102d54ac13076c51ef635965"
   }
 }

@@ -74,7 +74,11 @@ function createWindow() {
         {
           label: 'About',
           click: () => {
-            createModal(mainWindow, '../about.html');
+            createModal(mainWindow, '../about.html', {
+              width: 580,
+              height: os.platform() == 'linux' ? 520 : 260,
+              resizable: false,
+            });
           }
         },
         {
@@ -83,6 +87,7 @@ function createWindow() {
             createModal(mainWindow, '../controls.html', {
               width: 580,
               height: os.platform() == 'linux' ? 240 : 260,
+              resizable: false,
             });
           }
         }

@@ -5,21 +5,22 @@
       var exports = {}
     </script>
     <meta charset="UTF-8" />
-    <title>Procedural Environment Generation using WebGL</title>
+    <title>Procedural Environment Generation</title>
     <!-- https://developer.mozilla.org/en-US/docs/Web/HTTP/CSP -->
     <meta
       http-equiv="Content-Security-Policy"
-      content="img-src 'self' data:; default-src 'self'; script-src 'self' 'unsafe-eval' 'unsafe-inline'; style-src 'self' 'unsafe-inline';"
+      content="img-src 'self' data:; default-src 'self'; script-src 'self' 'unsafe-eval' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https:;"
     />
     <meta
       http-equiv="X-Content-Security-Policy"
       content="default-src 'self'; script-src 'self'"
     />
     <link rel="stylesheet" href="./dist/css/styles.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.0.2/css/bootstrap.min.css">
     <!-- <link rel="stylesheet" href="https://raw.githubusercontent.com/dataarts/dat.gui/master/build/dat.gui.css" />
     <script type="text/javascript" src="https://raw.githubusercontent.com/dataarts/dat.gui/master/build/dat.gui.min.js"></script> -->
   </head>
-  <body>
+  <body class="bg-dark">
     <div id="webgl"></div>
     <div id="noise"></div>
 

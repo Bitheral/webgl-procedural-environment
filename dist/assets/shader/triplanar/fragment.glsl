@@ -183,6 +183,10 @@ void main() {
         } else {
             frontM = sampleMaterial(material, uv_front * scale + offset);
         }
+
+        if (normals.y <= 0.5) {
+            topM = sampleMaterial(material, uv_bottom * scale + offset);
+        }
     } else {
         if (normals.x <= 0.5) {
             sideM = sampleMaterial(material, uv_left * scale + (vec2(0,1) * scale));
@@ -195,12 +199,12 @@ void main() {
         } else {
             frontM = sampleMaterial(material, uv_front * scale + (vec2(0,1) * scale));
         }
-    }
 
-    if (normals.y <= 0.5) {
-        topM = sampleMaterial(material, uv_bottom * scale + (vec2(0,1) * scale));
-    } else {
-        topM = sampleMaterial(material, uv_top * scale + offset);
+        if (normals.y <= 0.5) {
+            topM = sampleMaterial(material, uv_bottom * scale + (vec2(0,1) * scale));
+        } else {
+            topM = sampleMaterial(material, uv_top * scale + offset);
+        }
     }
 
     // if (normals.x <= 0.5) {

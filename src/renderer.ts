@@ -597,7 +597,7 @@ function updateScatter(scattering: ObjectScattering): ObjectScattering {
     const normals = [] as Vector3[];
     for(let i = 0; i < volumes.length; i++) {
         const volume = volumes[i];
-        const heightMapData = volume.getHeightmap(data.scale);
+        const heightMapData = volume.getHeightmap(data.scale <= 1 ? 1 : data.scale);
         // Move all points from volume's heightmap to points
         for(let j = 0; j < heightMapData.length; j++) {
             const data = heightMapData[j];
