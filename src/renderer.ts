@@ -966,6 +966,8 @@ function render() {
     volumeMaterial.uniforms.viewPosition.value = camera.position;
     volumeMaterial.uniformsNeedUpdate = true;
 
+    params.waterLevel <= 0 ? waterMaterial.side = THREE.FrontSide : waterMaterial.side = THREE.DoubleSide;
+
     orbit_controls.update(clock.getDelta());
     
     renderer.render(scene, camera)
