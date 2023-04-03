@@ -6,7 +6,9 @@ function createModal(mainWindow: BrowserWindow, pathToPage: string, options = {}
   const modal = new BrowserWindow({
     parent: mainWindow,
     show: false,
+    icon: path.join(__dirname, "assets", "icons", "icon.png") || undefined,
     ...options,
+
   });
 
   modal.loadFile(path.join(__dirname, pathToPage));
@@ -57,7 +59,7 @@ function createWindow() {
         { label: 'Force Reload', accelerator: 'Shift+CmdOrCtrl+R', click: () => { mainWindow.webContents.reloadIgnoringCache(); } },
         { type: 'separator' },
         { label: 'Toggle Full Screen', accelerator: 'F11', click: () => { mainWindow.setFullScreen(!mainWindow.isFullScreen()); } },
-        { label: 'Toggle Developer Tools', accelerator: 'Alt+CmdOrCtrl+I', click: () => { mainWindow.webContents.toggleDevTools(); } }
+        { label: 'Toggle Developer Tools', accelerator: 'Shift+CmdOrCtrl+I', click: () => { mainWindow.webContents.toggleDevTools(); } }
       ]
     },
     {
@@ -76,7 +78,7 @@ function createWindow() {
           click: () => {
             createModal(mainWindow, '../about.html', {
               width: 580,
-              height: os.platform() == 'linux' ? 520 : 260,
+              height: os.platform() == 'linux' ? 520 : 500,
               resizable: false,
             });
           }
