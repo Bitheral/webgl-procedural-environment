@@ -7,9 +7,10 @@
     "watch": "tsc -w",
     "lint": "eslint -c .eslintrc --ext .ts ./src",
     "start": "npm run build && electron ./dist/main.js",
-    "electron:build": "npm run build && electron-packager . --overwrite -p --asar",
     "electron:build:linux": "npm run build && electron-packager . procedural-environment-generation.AppImage --overwrite -p --asar --platform=linux --ignore=\"(src|.*\\.gitignore|.*\\.eslintrc|.*tsconfig\\.json|.*pnpm-lock\\.yaml|.*debug\\.log)\"",
-    "electron:build:win": "npm run build && electron-packager . --overwrite -p --asar --platform=win32 --ignore=\"(src|.*\\.gitignore|.*\\.eslintrc|.*tsconfig\\.json|.*pnpm-lock\\.yaml|.*debug\\.log)\""
+    "electron:build:win": "npm run build && electron-packager . --overwrite -p --asar --platform=win32 --ignore=\"(src|.*\\.gitignore|.*\\.eslintrc|.*tsconfig\\.json|.*pnpm-lock\\.yaml|.*debug\\.log)\"",
+    "electron:build:mac": "npm run build && electron-packager . --overwrite -p --asar --platform=darwin --ignore=\"(src|.*\\.gitignore|.*\\.eslintrc|.*tsconfig\\.json|.*pnpm-lock\\.yaml|.*debug\\.log)\"",
+    "electron:build:all": "npm run electron:build:linux && npm run electron:build:win && npm run electron:build:mac"
   },
   "main": "dist/main.js",
   "repository": {
@@ -29,7 +30,7 @@
     "Typescript"
   ],
   "author": "Bitheral <me@bitheral.net>",
-  "license": "ISC",
+  "license": "MIT",
   "devDependencies": {
     "@typescript-eslint/eslint-plugin": "^4.33.0",
     "@typescript-eslint/parser": "^4.33.0",
