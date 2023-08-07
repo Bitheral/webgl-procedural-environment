@@ -13,6 +13,11 @@ The project uses the following technologies:
 
 This project is in part of my dissertation for my BSc in Computer Games Development.
 
+To produce the terrain, a NodeJS package was made to implement the Marching Cubes algorithm into ThreeJS
+<a href="https://github.com/bitheral/MarchingCubes" target="_blank">
+    <img src="https://github-readme-stats.vercel.app/api/pin/?username=bitheral&repo=MarchingCubes&show_owner=false&hide_border=true&theme=github_dark" alt="Procedural Environment Generation" />
+   </a>   
+
 ## Objectives
 
 * Produce a procedural terrain using the Marching Cubes algorithm
