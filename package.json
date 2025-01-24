@@ -1,51 +1,24 @@
 {
-  "name": "procedural-environment-generation",
-  "version": "1.0.0",
-  "description": "A minimal Electron application written with Typescript, that renders a procedural environment using WebGL.",
+  "name": "webgl-procedural-environment",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
   "scripts": {
-    "build": "tsc",
-    "watch": "tsc -w",
-    "lint": "eslint -c .eslintrc --ext .ts ./src",
-    "start": "npm run build && electron ./dist/main.js",
-    "electron:build:linux": "npm run build && electron-packager . procedural-environment-generation.AppImage --overwrite -p --asar --platform=linux --ignore=\"(src|.*\\.gitignore|.*\\.eslintrc|.*tsconfig\\.json|.*pnpm-lock\\.yaml|.*debug\\.log)\"",
-    "electron:build:win": "npm run build && electron-packager . --overwrite -p --asar --platform=win32 --ignore=\"(src|.*\\.gitignore|.*\\.eslintrc|.*tsconfig\\.json|.*pnpm-lock\\.yaml|.*debug\\.log)\"",
-    "electron:build:mac": "npm run build && electron-packager . --overwrite -p --asar --platform=darwin --ignore=\"(src|.*\\.gitignore|.*\\.eslintrc|.*tsconfig\\.json|.*pnpm-lock\\.yaml|.*debug\\.log)\"",
-    "electron:build:all": "npm run electron:build:linux && npm run electron:build:win && npm run electron:build:mac"
+    "dev": "vite --host",
+    "build": "tsc && vite build",
+    "preview": "vite preview"
   },
-  "main": "dist/main.js",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/Bitheral/webgl-procedural-environment.git"
-  },
-  "type": "commonjs",
-  "homepage": "https://github.com/Bitheral/webgl-procedural-environment#readme",
-  "bugs": {
-    "url": "https://github.com/Bitheral/webgl-procedural-environment/issues"
-  },
-  "keywords": [
-    "Electron",
-    "WebGL",
-    "Procedural",
-    "ThreeJS",
-    "Typescript"
-  ],
-  "author": "Bitheral <me@bitheral.net>",
-  "license": "MIT",
   "devDependencies": {
-    "@typescript-eslint/eslint-plugin": "^4.33.0",
-    "@typescript-eslint/parser": "^4.33.0",
-    "electron": "^21.0.1",
-    "eslint": "^7.32.0",
-    "typescript": "^4.8.3"
+    "@types/three": "^0.172.0",
+    "typescript": "~5.6.2",
+    "vite": "^6.0.5"
   },
   "dependencies": {
-    "@bitheral/marching-cubes": "^1.4.5",
-    "@types/dat.gui": "^0.7.7",
-    "@types/stats.js": "^0.17.0",
-    "@types/three": "^0.144.0",
+    "alea": "^1.0.1",
     "dat.gui": "^0.7.9",
+    "perlin.js": "^1.0.0",
+    "simplex-noise": "^4.0.3",
     "stats.js": "^0.17.0",
-    "three": "^0.145.0",
-    "three-orbitcontrols": "git@github.com:Bitheral/three-orbitcontrols.git#0e43f1c6143c1a4c102d54ac13076c51ef635965"
+    "three": "^0.172.0"
   }
 }

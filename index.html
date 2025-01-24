@@ -1,33 +1,17 @@
-<!DOCTYPE html>
-<html>
-  <head>
-    <script>
-      var exports = {}
-    </script>
-    <meta charset="UTF-8" />
-    <title>Procedural Environment Generation</title>
-    <!-- https://developer.mozilla.org/en-US/docs/Web/HTTP/CSP -->
-    <meta
-      http-equiv="Content-Security-Policy"
-      content="img-src 'self' data:; default-src 'self'; script-src 'self' 'unsafe-eval' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https:;"
-    />
-    <meta
-      http-equiv="X-Content-Security-Policy"
-      content="default-src 'self'; script-src 'self'"
-    />
-    <link rel="stylesheet" href="./dist/css/styles.css" />
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.0.2/css/bootstrap.min.css">
-    <!-- <link rel="stylesheet" href="https://raw.githubusercontent.com/dataarts/dat.gui/master/build/dat.gui.css" />
-    <script type="text/javascript" src="https://raw.githubusercontent.com/dataarts/dat.gui/master/build/dat.gui.min.js"></script> -->
-  </head>
-  <body class="bg-dark">
-    <div id="webgl"></div>
-    <div id="noise"></div>
+<!doctype html>
+<html lang="en">
 
-    <!-- You can also require other files to run in this process -->
-    <!-- <script src="./dist/renderer.js"></script> -->
-    <script>
-      require('./dist/renderer.js')
-    </script>
-  </body>
+<head>
+  <meta charset="UTF-8" />
+  <link rel="icon" type="image/png" href="/favicon.png" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Procedural Environment Generation using WebGL</title>
+</head>
+
+<body>
+  <div id="webgl"></div>
+  <div id="noise"></div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+
 </html>
