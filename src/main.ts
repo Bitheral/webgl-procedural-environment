@@ -1,12 +1,12 @@
 import './style.css'
 
 import * as THREE from 'three';
-import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
+import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { GUI } from 'dat.gui';
 import Stats from 'stats.js';
 import { Volume } from './marchingcubes';
 
-import rockShaderSource from './assets/shader/objectScatter/rock';
+// import rockShaderSource from './assets/shader/objectScatter/rock';
 import triplanarShaderSource from './assets/shader/triplanar';
 // import waterShaderSource from './assets/shader/water';
 
