@@ -105,7 +105,7 @@ const controls = new OrbitControls(camera, document.body);
 const light = new THREE.DirectionalLight(0xffffff, 1);
 const volume = new Volume(volumeSize, new THREE.Vector3, new THREE.Vector3);
 
-const RockMaterial = createPBRMaterial('rock', 'jpg');
+// const RockMaterial = createPBRMaterial('rock', 'jpg');
 const TerrainMaterial = createPBRMaterial('terrain', 'png');
 // const WaterMaterial = createPBRMaterial('water', 'jpg');
 
@@ -310,7 +310,7 @@ noiseFolder.add(ob, 'seed', -65566, 65536).onChange(() => {
 }).name('Noise Seed');
 let noiseConfigsFolder = noiseFolder.addFolder('Noise Configs');
 
-const environmentFolder = gui.addFolder('Environment');
+// const environmentFolder = gui.addFolder('Environment');
 
 // const waterFolder = environmentFolder.addFolder('Water');
 
