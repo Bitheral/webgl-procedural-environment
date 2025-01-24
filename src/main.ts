@@ -246,7 +246,7 @@ const params = {
           break;
       }
 
-      updateMesh([], true);
+      updateMesh([]);
     },
     regenerate: () => {
       // for (const volume of volumes) {
