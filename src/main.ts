@@ -8,7 +8,7 @@ import { Volume } from './marchingcubes';
 
 import rockShaderSource from './assets/shader/objectScatter/rock';
 import triplanarShaderSource from './assets/shader/triplanar';
-import waterShaderSource from './assets/shader/water';
+// import waterShaderSource from './assets/shader/water';
 
 const stats = new Stats()
 stats.showPanel(0); // 0: fps, 1: ms, 2: mb, 3+: custom
@@ -98,7 +98,7 @@ const textureLayers: TextureLayer[] = [
 
 const volumeSize = 32;
 const volumesAmount = 1;
-const volumeSeed = new Date().getTime() % 65536;
+// const volumeSeed = new Date().getTime() % 65536;
 
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
 const controls = new OrbitControls(camera, document.body);
@@ -107,7 +107,7 @@ const volume = new Volume(volumeSize, new THREE.Vector3, new THREE.Vector3);
 
 const RockMaterial = createPBRMaterial('rock', 'jpg');
 const TerrainMaterial = createPBRMaterial('terrain', 'png');
-const WaterMaterial = createPBRMaterial('water', 'jpg');
+// const WaterMaterial = createPBRMaterial('water', 'jpg');
 
 const ob = {
   seed: volume.seed,
@@ -312,7 +312,7 @@ let noiseConfigsFolder = noiseFolder.addFolder('Noise Configs');
 
 const environmentFolder = gui.addFolder('Environment');
 
-const waterFolder = environmentFolder.addFolder('Water');
+// const waterFolder = environmentFolder.addFolder('Water');
 
 gui.add(ob, 'autoUpdate').name('Auto Update');
 gui.add(params.actions, 'regenerate').name('Regenerate');
@@ -321,26 +321,26 @@ params.actions.createConfigFolders()
 
 ////
 // Shaders
-const rockShader = new THREE.ShaderMaterial({
-  uniforms: {
-    mat: {
-      value: MaterialUniform(RockMaterial)
-    },
-    volumeScale: {
-      value: volumeSize * volumesAmount
-    },
-    worldLight: {
-      value: {
-        position: light.position,
-        direction: light.getWorldDirection(new THREE.Vector3(volumeSize * 0.5, 0, volumeSize * 0.5)),
-      }
-    },
-    viewPosition: {
-      value: camera.position
-    }
-  },
-  ...rockShaderSource
-});
+// const rockShader = new THREE.ShaderMaterial({
+//   uniforms: {
+//     mat: {
+//       value: MaterialUniform(RockMaterial)
+//     },
+//     volumeScale: {
+//       value: volumeSize * volumesAmount
+//     },
+//     worldLight: {
+//       value: {
+//         position: light.position,
+//         direction: light.getWorldDirection(new THREE.Vector3(volumeSize * 0.5, 0, volumeSize * 0.5)),
+//       }
+//     },
+//     viewPosition: {
+//       value: camera.position
+//     }
+//   },
+//   ...rockShaderSource
+// });
 
 const volumeMaterial = new THREE.ShaderMaterial({
   uniforms: {
@@ -416,6 +416,7 @@ let cube = new THREE.Mesh(geometry, material);
 
 function updateMesh(loadedModels: THREE.Mesh[], forced = false) {
   if (!ob.autoUpdate && !forced) return;
+  loadedModels.forEach(model => { model.geometry.dispose(); });
 
   // for (const volume of volumes) {
   //   volume.update("noise");
@@ -435,8 +436,8 @@ function updateMesh(loadedModels: THREE.Mesh[], forced = false) {
   // rockScatter = updateScatter(rockScatter);
   // treeScatter = updateScatter(treeScatter);
 
-  const radians = (degrees: number) => degrees * Math.PI / 180;
-  const degrees = (radians: number) => radians * 180 / Math.PI;
+  // const radians = (degrees: number) => degrees * Math.PI / 180;
+  // const degrees = (radians: number) => radians * 180 / Math.PI;
 
   // loadedModels.forEach(model => {
   //   const mat = model.material as THREE.Material;

@@ -1,7 +1,6 @@
 import { BufferGeometry, Float32BufferAttribute, Mesh, MeshBasicMaterial, Raycaster, Vector3, Vector4 } from "three";
 import { createNoise3D, createNoise2D } from "simplex-noise";
 import { seed, perlin2, perlin3 } from "perlin.js"
-import alea from "alea";
 
 import { edgeTable, triTable, cornerIndexFromEdge } from "./lookup.json";
 
